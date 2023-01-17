@@ -1,14 +1,23 @@
 #!/usr/bin/env php
 <?php
 
+/**
+ * Version
+ */
 define('VERSION', 'beta');
-define('PHP_MIN_VERSION', 8.1);
-define('CONFIG_DIR', '.config');
-define('CONFIG_SUBDIR', 'toopt');
-define('DEFAULT_CONFIG_FILE', 'toopt.json');
 
 /**
- * Mastodon configurations
+ * Minimum php version required
+ */
+define('PHP_MIN_VERSION', 8.1);
+
+/**
+ * Path to config file in user's home directory
+ */
+define('CONFIG_FILE', '.config/toopt/toopt.json');
+
+/**
+ * Mastodon client app configurations
  */
 define('MASTODON_CLIENT_NAME', 'Toopt');
 define('MASTODON_SCOPES', 'read write follow');
@@ -16,14 +25,15 @@ define('MASTODON_CLIENT_WEBSITE', 'https://fruitbat.studio');
 define('MASTODON_REDIRECT_URIS', 'urn:ietf:wg:oauth:2.0:oob');
 
 /**
- * Convenience defines of meta characters
+ * Convenience defines of meta characters for ANSI
  */
 define('BACKSPACE', chr(8));
 define('ESC', "\033"); // for use with ANSI codes
 define('ERASE_TO_END_OF_LINE', "\033[0K");
 
 /**
- * ANSI color codes for output styling. Background colors are calculated from these foreground codes.
+ * ANSI color codes for output styling.
+ * Background colors are calculated from these foreground codes.
  */
 define('BLACK', '30');
 define('RED', '31');
@@ -71,69 +81,60 @@ define('EMERGENCY', "[".ESC."[".RED."mEMERGENCY".CLOSE_ANSI."] ");
  */
 cli_set_process_title("toopt");
 
+/**
+ * Script start
+ */
 $api = new Api();
 $toopt = new Toopt($api);
-
 $toopt->parseargs($argv);
 $toopt->preflight();
 $toopt->handleHelp();
 $toopt->handleVersion();
-$toopt->handleAccounts();
-$toopt->authenticate();
-//$tpt->toot();
+$toopt->setConfigFile();
+$toopt->handleListAccounts();
+$toopt->handleAddAccount();
+$toopt->toot();
 
-die();
+/**
+ * Exit without error
+ */
+exit(0);
 
-$s = $tpt->threadify($str);
-print_r($s);
-
+/**
+ * Toopt
+ *
+ * Main class containing toopt functionality
+ */
 class Toopt
 {
+    /**
+     * Maximum chars of one toot. Content longer will be threaded.
+     */
     private Int $maxchars = 140;
 
+    /**
+     * Parsed command line arguments
+     */
     private Array $args = [];
 
-    private String $configPath;
+    /**
+     * Full path to configuration file
+     */
+    private String $configFile;
 
+    /**
+     * Api object
+     */
     private Api $api;
 
+    /**
+     * Constructor
+     *
+     * @param  Api $api
+     */
     public function __construct(Api $api)
     {
         $this->api = $api;
-    }
-
-    /**
-     * Validate the environment has everything this script needs to run.
-     *
-     * @return void
-     */
-    public function preflight():void
-    {
-        $preflightFailures = [];
-
-        // validate PHP is PHP_MIN_VERSION or better
-        $minVersion = (int)join(explode('.', PHP_MIN_VERSION));
-        $phpversion_array = explode('.', phpversion());
-        if ((int)$phpversion_array[0].$phpversion_array[1] < $minVersion) {
-            $preflightFailures[] = 'Minimum php required is '.PHP_MIN_VERSION;
-        }
-
-        // validate posix exists
-        if(!extension_loaded('posix')) {
-            $preflightFailures[] = "Extention 'posix' is required";
-        }
-
-        // validate curl exists
-        if(!extension_loaded('curl')) {
-            $preflightFailures[] = "Extention 'curl' is required";
-        }
-
-        // dump errors and kill script
-        if(count($preflightFailures) > 0) {
-            array_map(fn($f) => $this->error($f), $preflightFailures);
-            fwrite(STDERR, 'exiting'.PHP_EOL);
-            die();
-        }
     }
 
     /**
@@ -165,17 +166,82 @@ class Toopt
     }
 
     /**
+     * Validate the environment has everything this script needs to run.
+     * Terminate on failure
+     *
+     * @return void
+     */
+    public function preflight():void
+    {
+        $preflightFailures = [];
+
+        // validate PHP is PHP_MIN_VERSION or better
+        $minVersion = (int)join(explode('.', PHP_MIN_VERSION));
+        $phpversion_array = explode('.', phpversion());
+        if ((int)$phpversion_array[0].$phpversion_array[1] < $minVersion) {
+            $preflightFailures[] = 'Minimum php required is '.PHP_MIN_VERSION;
+        }
+
+        // validate posix exists
+        if(!extension_loaded('posix')) {
+            $preflightFailures[] = "Extention 'posix' is required";
+        }
+
+        // validate curl exists
+        if(!extension_loaded('curl')) {
+            $preflightFailures[] = "Extention 'curl' is required";
+        }
+
+        // dump errors, if any, and kill script
+        if(count($preflightFailures) > 0) {
+            array_map(fn($f) => $this->error($f), $preflightFailures);
+            fwrite(STDERR, 'exiting'.PHP_EOL);
+            exit(1);
+        }
+    }
+
+    /**
      * Output help if the --help argument has been parsed into the $args array
      *
      * @return void
      */
     public function handleHelp():void
     {
+        // ansi stylings as args to use in heredoc
+        $boldAnsi = BOLD_ANSI;
+        $closeAnsi = CLOSE_ANSI;
+
+        // help text
         $helpOutput =<<<TXT
-        help.
+        {$boldAnsi}Usage:{$closeAnsi}
+             toopt.php "STRING"
+        or:  toopt.php /path/to/text/file
+        or:  echo "STRING" | toopt.php
+        or:  cat /path/to/text/file | toopt.php
+
+        {$boldAnsi}Arguments:{$closeAnsi}
+          --list-accounts    Show all accounts available. Default account highlighted.
+          --add-account      Log into mastodon and add account to list of available accounts.
+          --account=ADDRESS  Explicitly use an account
+          --help             Show this page
+          --version          Show version
+
+        {$boldAnsi}Examples:{$closeAnsi}
+          $ toopt.php "some toot"
+          Toot as the default account.
+
+          $ toopt.php --address=@user@instance.tld "some toot"
+          Toot as a specific account as listed in the output from --list-accounts.
+
+          $ echo "some toot" | toopt.php
+          Toot content piped in from STDIN
+
+          $ toopt.php /path/to/file
+          Toot content in textfile
         TXT;
+
         if(isset($this->args['help'])) {
-            fwrite(STDOUT, $helpOutput);
+            fwrite(STDOUT, wordwrap($helpOutput, $this->getColWidth(), PHP_EOL));
             die();
         }
     }
@@ -193,127 +259,162 @@ class Toopt
         }
     }
 
+    /**
+     * Set path to config file. Make directories and files if necessary.
+     * Validate permissions
+     *
+     * @return void
+     */
+    public function setConfigFile():void
+    {
+        $configFile = posix_getpwuid(posix_getuid())['dir'].'/'.CONFIG_FILE;
+        $dotConfigToopt = (dirname($configFile));
+        $dotConfig = dirname($dotConfigToopt);
+
+        $handleDirectory = function(String $path) {
+            if(!file_exists($path)) {
+                if(!mkdir($path, 0755)) {
+                    $this->error("Could not make directory $path");
+                    exit(1);
+                }
+            }
+
+            if(!is_dir($path)) {
+                $this->error("File $path exists but is not a directory");
+                exit(1);
+            }
+
+            if(!is_writeable($path)) {
+                $this->error("File $path is not writeable by this user");
+                exit(1);
+            }
+        };
+
+        $handleDirectory($dotConfig);
+        $handleDirectory($dotConfigToopt);
+
+        if(!file_exists($configFile)) {
+            touch($configFile);
+        }
+
+        if(!is_readable($configFile)) {
+            $this->error("Configuration file at $configFile is not readable");
+            exit(1);
+        }
+
+        $this->configFile = $configFile;
+    }
 
     /**
      * Outputs the list of accounts in the config file if the --accounts argument has been
      * parsed into the $args array.
      * Indicates last-used account.
      * Handles errors for missing or empty config.
+     * Terminates script
      *
      * @return void
      */
-    public function handleAccounts():void
+    public function handleListAccounts():void
     {
-        if(isset($this->args['accounts'])) {
-            if($this->setConfigFilePath()) {
-                $configArray = json_decode(file_get_contents($this->configPath), true);
-                $last = @$configArray['last'] ?? null;
-
-                $outputArray = array_map(function($a) use($last) {
-                    $lead = $a == $last ? GREEN_ANSI."* ".CLOSE_ANSI : "  ";
-                    return $lead.$a.PHP_EOL;
-                }, array_keys($configArray['accounts'] ?? []));
-
-                $output = count($outputArray) > 0 ? join($outputArray) : "There are no accounts. Please login";
-                fwrite(STDOUT, $output);
+        if(isset($this->args['list-accounts'])) {
+            if(isset($this->configFile)) {
+                $this->outputListAccount();
             }
             die();
         }
     }
 
-
-    public function authenticate():void
-    {
-        $configSet = $this->setConfigFilePath();
-
-        // if there is no config file or if the login argument is passed, do login
-        if(!$configSet || isset($this->args['login'])) {
-
-            // get credentials from user: instance, username and password
-            $credentials = $this->pollForLogin();
-
-            // create app with mastodon instance
-            $app = $this->createApp($credentials->instance);
-
-            // doOauth
-            $oauth = (object)[];
-            $oauth->access_token = "notaan accesstoken";
-
-            // update the config
-            $this->writeConfig($credentials->instance, $credentials->username, $app->client_id, $app->client_secret, $oauth->access_token);
-        }
-
-    }
-
     /**
-     * Write the account to the config file. Set the 'last' account used to this
+     * Polls user for account credentials, creates app and does login, verifies
+     * the account and writes results as an account in the config file. Sets new
+     * account as 'default'. Outputs account list.
+     * Terminates script
      *
-     * @param  String $instance
-     * @param  String $username
-     * @param  String $clientId
-     * @param  String $clientSecret
-     * @param  String $accessToken
      * @return void
      */
-    private function writeConfig(String $instance, String $username, String $clientId, String $clientSecret, String $accessToken):void
+    public function handleAddAccount():void
     {
-        $userAddress = "@$username@$instance";
+        if(isset($this->args['add-account'])) {
+            // get user input for account
+            $instance = $this->pollForInstance();
+            $username = $this->pollForEmail();
+            $password = $this->pollForPassword();
 
-        // read in existing config if any
-        $configArray = json_decode(file_get_contents($this->configPath) ?? [], true);
+            // create app
+            $app = $this->createApp($instance);
 
-        // add account, clobbering with new if required
-        $configArray['last'] = $userAddress;
-        $configArray ['accounts'][$userAddress] = [
-            'instance' => $instance,
-            'username' => $username,
-            'client_id' => $clientId,
-            'client_secret' => $clientSecret,
-            'access_token' => $accessToken,
-        ];
+            // log user in
+            $session = $this->doOauth($instance, $username, $password, $app->client_id, $app->client_secret);
 
-        // overwrite
-        $fp = fopen($this->configPath, 'w');
-        fwrite($fp, json_encode($configArray, JSON_PRETTY_PRINT));
-        fclose($fp);
+            // verify account and build the address for it, ie @username@instance.tld
+            $verification = $this->doVerifyCredentials($instance, $session->access_token);
+            $accountAddress = '@'.$verification->acct.'@'.$instance;
+
+            // write to config file
+            $this->writeConfig($accountAddress, $instance, $app->client_id, $app->client_secret, $session->access_token);
+
+            // dump list of accounts
+            $this->outputListAccount();
+            exit(0);
+        }
+    }
+
+
+    public function toot():void
+    {
+        $credentials = $this->getAccountCredentials();
+        $content = $this->getContent();
+        $contentArray = $this->threadify($content);
+        print_r($contentArray);
+    }
+
+
+    /**
+     * Polls user for their mastodon instance and returns
+     *
+     * @return String  The mastodon instance
+     */
+    private function pollForInstance():String
+    {
+        $prompt = "instance: ";
+
+        $validate = 1;
+        do {
+            $instance = trim(readline($prompt));
+            $validate = preg_match('![0-9a-zA-Z0-9_\-]+\.[0-9A-Za-z_\-]+!',$instance);
+            if($validate == 0) {
+                $this->error("Must be in format <domain>.<tld>");
+            }
+            // handle up-arrow history scrolling
+            readline_add_history($instance);
+        }
+        while($validate < 1);
+
+        return $instance;
     }
 
     /**
-     * Polls for user address and password and returns
-     * array with instance, username and password.
+     * Polls user for the email address used for login username and returns
      *
-     * @return Array
+     * @return String The email
      */
-    private function pollForLogin():Object
+    private function pollForEmail():String
     {
-        $userAddress = $this->pollForUserAddresss();
-        $password = $this->pollForPassword();
+        $prompt = "email: ";
 
-        return (object)[
-            'instance' => $userAddress->instance,
-            'username' => $userAddress->username,
-            'password' => $password,
-        ];
-    }
-
-    private function createApp(String $instance):Object
-    {
-        $endpoint = "https://$instance/api/v1/apps";
-        $data = [
-            'client_name' => MASTODON_CLIENT_NAME,
-            'redirect_uris' => MASTODON_REDIRECT_URIS,
-            'scopes' => MASTODON_SCOPES,
-            'website' => MASTODON_CLIENT_WEBSITE,
-        ];
-
-        try {
-            return $this->api->post($endpoint, $data);
-            //{"id":"1732666","name":"Toopt","website":"https://fruitbat.studio","redirect_uri":"urn:ietf:wg:oauth:2.0:oob","client_id":"EDsOc0G89lkV8t_7unv1D_W7QHyS-tG0rue2_t6OU9s","client_secret":"xloIt6mGfcc8betgdcO5UHKtF9PQV51-w_lo-EWYFBw","vapid_key":"BCk-QqERU0q-CfYZjcuB6lnyyOYfJ2AifKqfeGIm7Z-HiTU5T9eTG5GxVA0_OH5mMlI4UkkDTpaZwozy0TzdZ2M="}
+        $validate = 1;
+        do {
+            $email = trim(readline($prompt));
+            $validate = filter_var($email, FILTER_VALIDATE_EMAIL);
+            if($validate == 0) {
+                $this->error("Must be a valid email");
+            }
+            // handle up-arrow history scrolling
+            readline_add_history($email);
         }
-        catch (Exception $e) {
-            $this->error($e->getMessage());
-            die();
-        }
+        while($validate < 1);
+
+        return $email;
     }
 
     /**
@@ -329,7 +430,7 @@ class Toopt
         $passwordCharArray = [];
 
         // output 'password:' prompt
-        $prompt = BOLD_ANSI."password: ".CLOSE_ANSI;
+        $prompt = "password: ";
         fwrite(STDOUT, $prompt);
 
         // accept and handle each user keystroke until <RETURN>
@@ -357,119 +458,133 @@ class Toopt
         return join($passwordCharArray);
     }
 
-
     /**
-     * Poll user for input of user address. Return user address as array keyed with 
-     * 'username' and 'instance'.
+     * Create the app on the mastodon instance.
+     * Calls POST to mastodon instance to create the app which is used for all
+     * future api calls. Returns instance details as object, notably:
+     *  - client_id
+     *  - client_secret
+     * Terminates on error.
      *
-     * Input user address validated to be in format '@username@instance'
-     *
-     * @return Object The 'username' and 'instance' in an object
+     * @param  String $instance The instance, ie mastodon.social
+     * @return Object The instance details
      */
-    private function pollForUserAddresss():Object
+    private function createApp(String $instance):Object
     {
-        $prompt = "username"." [@username@instance]: ";
-
-        // poll for input until validation passes
-        do {
-            $userAddress = trim(readline($prompt));
-            $validate = preg_match('!@[a-zA-Z0-9_\-]+@[a-z_\-]+\.[a-z]+!',$userAddress);
-            if($validate == 0) {
-                $this->error("Must be in format @username@instance");
-            }
-            // handle up-arrow history scrolling
-            readline_add_history($userAddress);
-        }
-        while($validate < 1);
-
-        // break user address into array of username and instance
-        $userAddressParts = array_values(array_filter(explode('@', $userAddress)));
-
-        return (object)[
-            'username' => $userAddressParts[0],
-            'instance' => end($userAddressParts),
+        $endpoint = "https://$instance/api/v1/apps";
+        $data = [
+            'client_name' => MASTODON_CLIENT_NAME,
+            'redirect_uris' => MASTODON_REDIRECT_URIS,
+            'scopes' => MASTODON_SCOPES,
+            'website' => MASTODON_CLIENT_WEBSITE,
         ];
+
+        try {
+            return $this->api->post($endpoint, $data);
+        }
+        catch (Exception $e) {
+            $this->error("Could not create app. ".$e->getMessage());
+            exit(1);
+        }
     }
 
     /**
-     * Sets the config file path as $configPath; either user-supplied or default.
-     * If file exists but is not readable, dies.
-     * Returns false on error.
+     * Calls instance identified by $instance to verify credentials of account
+     * identified by $accessToken.
+     * Terminates on error.
      *
-     * @return bool
+     * @param  String $instance
+     * @param  String $accessToken
+     * @return Object
      */
-    private function setConfigFilePath():bool
+    private function doVerifyCredentials(String $instance, String $accessToken):object
     {
-        $this->configPath = $this->getDefaultConfigFilePath();
-        
-        if(!file_exists($this->configPath)) {
-            $this->error("Config at {$this->configPath} does not exist. Please login.");
-            return false;
+        $endpoint = "https://$instance/api/v1/accounts/verify_credentials";
+        try {
+            return $this->api->get($endpoint, $accessToken);
         }
-
-        if(!is_readable($this->configPath)) {
-            $this->error("Config at {$this->configPath} exists but is not readable. Please adjust permissions.");
-            die();
+        catch (Exception $e) {
+            $this->error("Could not verify account. ".$e->getMessage());
+            exit(1);
         }
-
-        return true;
-    }
-
-
-
-    public function toot():void
-    {
-        $content = $this->getContent();
-        $contentArray = $this->threadify($content);
-        print_r($contentArray);
     }
 
     /**
-     * Returns the path to the default config file. 
-     * Creates directories and tests permissions.
+     * Calls instance identified by $instance using app identified iwth $clientId and
+     * $clientSecret to log in user using credentials $username and $password. Returns
+     * results as object, including * $access_token
+     * Terminates on error.
+     *
+     * @param  String $instance
+     * @param  String $username
+     * @param  String $password
+     * @param  String $clientId
+     * @param  String $clientSecret
+     * @return Object
+     */
+    private function doOauth(String $instance, String $username, String $password, String $clientId, String $clientSecret):object
+    {
+        $endpoint = "https://$instance/oauth/token";
+        $data = [
+            'grant_type' => 'password',
+            'client_id' => $clientId,
+            'client_secret' => $clientSecret,
+            'username' => $username,
+            'password' => $password,
+            'scopes' => MASTODON_SCOPES,
+        ];
+        
+        try {
+            return $this->api->post($endpoint, $data);
+        }
+        catch (Exception $e) {
+            $this->error("Could not log in. ".$e->getMessage());
+            exit(1);
+        }
+    }
+
+    /**
+     * Write the account to the config file. Sets the 'default' to the accounted
+     * keyed by $userAddress
+     *
+     * @param  String $userAddress
+     * @param  String $instance
+     * @param  String $clientId
+     * @param  String $clientSecret
+     * @param  String $accessToken
+     * @return void
+     */
+    private function writeConfig(String $userAddress, String $instance, String $clientId, String $clientSecret, String $accessToken):void
+    {
+
+        // read in existing config if any
+        $configArray = json_decode(file_get_contents($this->configFile) ?? [], true);
+
+        // add account, clobbering with new if required
+        $configArray['default'] = $userAddress;
+        $configArray ['accounts'][$userAddress] = [
+            'instance' => $instance,
+            'client_id' => $clientId,
+            'client_secret' => $clientSecret,
+            'access_token' => $accessToken,
+        ];
+
+        // overwrite
+        $fp = fopen($this->configFile, 'w');
+        fwrite($fp, json_encode($configArray, JSON_PRETTY_PRINT));
+        fclose($fp);
+    }
+
+    /**
+     * Reads the content of the toot from one of several sources in this
+     * order of priority:
+     *   - STDIN
+     *   - positional file
+     *   - positional string
      *
      * @return String
      */
-    private function getDefaultConfigFilePath():String
-    {
-        $configDir = posix_getpwuid(posix_getuid())['dir'].'/'.CONFIG_DIR;
-        $configSubDir = $configDir.'/'.CONFIG_SUBDIR;
-        $configFilePath = $configSubDir.'/'.DEFAULT_CONFIG_FILE;
-
-        // create config dir if not exists
-        if(!file_exists($configDir)){
-            $this->ok("Making configuration directory at $configDir");
-            if(!mkdir($configDir, 0755)) {
-                $this-error("Could not make configuration directory at $configDir");
-                die();
-            }
-        }
-
-        // validate config dir is a directory and is writeable
-        if(!is_writeable($configDir) || !is_dir($configDir)) {
-            $this->error("Cannot write to config dir at $configDir");
-            die();
-        }
-
-        // create config sub dir if not exists
-        if(!file_exists($configSubDir)){
-            $this->ok("Making configuration directory at $configSubDir");
-            if(!mkdir($configSubDir, 0755)) {
-                $this-error("Could not make configuration directory at $configDir");
-                die();
-            }
-        }
-
-        // validate config sub dir is a directory and is writeable
-        if(!is_writeable($configSubDir) || !is_dir($configSubDir)) {
-            $this->error("Cannot write to config dir at $configSubDir");
-            die();
-        }
-
-        return $configFilePath;
-    }
-
-    private function getContent():?String
+    private function getContent():String
     {
         $content = $this->readPipeContent();
         $content = $content ? $content : $this->readArgContent();
@@ -477,28 +592,17 @@ class Toopt
 
         if(strlen($content) == 0) {
             $this->error("No content");
-            die();
+            exit(1);
         }
 
         return $content;
     }
 
-    private function readArgContent():?String
-    {
-        $argContent = isset($this->args['positional'][0]) ? $this->args['positional'][0] : null;
-
-        if(is_file($argContent)) {
-            $extension ??= @pathinfo($argContent)['extension'];
-            if(in_array($extension, ['txt', null])) {
-                return file_get_contents($argContent);
-            }
-            return null;
-        }
-
-        return $argContent;
-    }
-
-
+    /**
+     * Read toot content from STDIN if exists. Returns null if no STDIN content.
+     *
+     * @return ?String
+     */
     private function readPipeContent():?String
     {
         $streams = [STDIN];
@@ -518,24 +622,65 @@ class Toopt
         return null;
     }
 
+    /**
+     * Read toot content from positional argument, either the content of a text file
+     * given as the argument or the string literal passed as the argument.
+     *
+     * @return ?String
+     */
+    private function readArgContent():?String
+    {
+        $argContent = isset($this->args['positional'][0]) ? $this->args['positional'][0] : null;
 
+        if(is_file($argContent)) {
+            $extension ??= @pathinfo($argContent)['extension'];
+            if(in_array($extension, ['txt', null])) {
+                return file_get_contents($argContent);
+            }
+            return null;
+        }
 
-
+        return $argContent;
+    }
 
     /**
+     * Outputs the list of accounts in the CONFIG_FILE. Default account is 
+     * preceeded by a green star.
+     *
+     * @return void
+     */
+    private function outputListAccount():void
+    {
+        $configArray = json_decode(file_get_contents($this->configFile), true);
+        $default = @$configArray['default'] ?? null;
+
+        $outputArray = array_map(function($a) use($default) {
+            $lead = $a == $default ? GREEN_ANSI."* ".CLOSE_ANSI : "  ";
+            return $lead.$a.PHP_EOL;
+        }, array_keys($configArray['accounts'] ?? []));
+
+        $output = count($outputArray) > 0 ?
+            BOLD_ANSI."Available accounts:".CLOSE_ANSI.PHP_EOL.join($outputArray) :
+            "There are no accounts. Please add an account with --add-account";
+
+        fwrite(STDOUT, $output);
+    }
+
+    /**
+     * Takes the toot content string as $t and returns array of toots to be threaded.
      * 
-     * @param  String $t    The content to post
+     * @param  String $t The content to post
      * @return Array
      */
-    public function threadify(String $t):Array
+    private function threadify(String $t):Array
     {
         // calculate number of posts in thread
         $pageCount = ceil(strlen($t)/ $this->maxchars);
 
         /**
-         *
+         * Tail recurse to build array of toots
          */
-        $threadify = function($str, $pageCount, $thread, $page = 1) use ( &$threadify ):Array {
+        $threadify = function($str, $pageCount, $thread = [], $page = 1) use ( &$threadify ):Array {
             $str = trim($str);
             
             // build page tag to put at bottom of post, ie. 1/2
@@ -547,31 +692,117 @@ class Toopt
                 return $thread;
             }
 
-            // split on newline if newline in last half of thread string, split on space otherwise
-            $threadEndChar = ' ';
-            if(strpos(substr($str, floor($this->maxchars/2), floor($this->maxchars / 2)), PHP_EOL) !== false) {
-                $threadEndChar = PHP_EOL;
-            }
+            /**
+             * Function to get the character to split the thread post on.
+             * - If a line break exists in the last 30% of the thread substring, use that
+             * - If a sentence break (.?!) exists in the last 20% of the thread substring, use that
+             * - Otherwise, use a space.
+             */
+            $getThreadEndChar = function($str) {
+                // if there is a line break in the last 30% of the string that is the maximum thread length, split on line break
+                if(strpos(substr($str, floor($this->maxchars*0.7), floor($this->maxchars - ($this->maxchars*0.7))), PHP_EOL) !== false) {
+                    return PHP_EOL;
+                }
 
-            // add head to thread array
-            $pos = strrpos(substr($str, 0, $this->maxchars), $threadEndChar);
+                // get positions for final ocurrence of all sentence breaks
+                // if the last of these is in the last 20% of the substring, split on that
+                $charPositions = [
+                    '.' => strrpos($str, '. '),
+                    '!' => strrpos($str, '! '),
+                    '?' => strrpos($str, '? '),
+                ];
+                arsort($charPositions);
+                if(array_values($charPositions)[0] >= $this->maxchars * 0.8) {
+                    return array_key_first($charPositions);
+                }
+
+                // default: split on space.
+                return ' ';
+            };
+
+            // get the char we split this post on
+            $threadEndChar = $getThreadEndChar(substr($str, 0, $this->maxchars));
+
+            // substring for this toot is head. add to accumulator.
+            $pos = strrpos(substr($str, 0, $this->maxchars), $threadEndChar)+1;
             $thread[] = substr($str, 0, $pos).$pageTag;
 
+            // tail call
             return $threadify(substr($str, $pos), $pageCount, $thread, $page);
         };
 
-        return $threadify($t, $pageCount, []);
+        return $threadify($t, $pageCount);
     }
 
+    /**
+     * Returns the number of cols to wrap output on.
+     * This is one half of the total columns or 80, whichever is higher.
+     *
+     * @return Int
+     * @note On systems without stty or awk, this returns 80.
+     */
+    private function getColWidth():int {
+        $ph = popen("/usr/bin/env stty -a 2> /dev/null | awk -F'[ ;]' '/columns/ { print $9 }'", 'r');
+        $columns = fread($ph, 2096);
+        pclose($ph);
+        if(filter_var($columns, FILTER_VALIDATE_INT) === false) {
+            return 80;
+        }
+        return $columns/2 > 80 ? (int)floor($columns/2) : 80;
+    }
 
+    /**
+     * Gets user credentials from config file and returns as array.
+     * Terminates on error
+     *
+     * @return Array
+     */
+    private function getAccountCredentials():Array
+    {
+        $accountConfig = null;
+        $configArray = json_decode(file_get_contents($this->configFile) ?? [], true);
+
+        // handle --account= arg
+        if(isset($this->args['account'])) {
+            if(!array_key_exists($this->args['account'], $configArray['accounts'])) {
+                $this->error("The account '".$this->args['account']."' does not exist. Try a different account, or adding an account with --add-account");
+                $this->outputListAccount();
+                exit(1);
+            }
+            $accountConfig = $configArray['accounts'][$this->args['account']];
+        }
+        // use default
+        else {
+            if(!array_key_exists('default', $configArray)) {
+                $this->error("No default account exists.");
+                exit(1);
+            }
+            $accountConfig = $configArray['accounts'][$configArray['default']];
+        }
+
+        return $accountConfig;
+    }
+
+    /**
+     * Output $message as ERROR to STDERR
+     *
+     * @param  String $message
+     * @return void
+     */
     private function error(String $message):void
     {
-        fwrite(STDERR, ERROR.$message.PHP_EOL);
+        fwrite(STDERR, ERROR.wordwrap($message, $this->getColWidth()).PHP_EOL);
     }
 
+    /**
+     * Output $message as OK to STDOUT
+     *
+     * @param  String $message
+     * @return void
+     */
     private function ok(String $message):void
     {
-        fwrite(STDOUT, OK.$message.PHP_EOL);
+        fwrite(STDOUT, OK.wordwrap($message, $this->getColWidth()).PHP_EOL);
     }
 }
 
@@ -585,14 +816,43 @@ Class api {
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_FAILONERROR, true);
 
-return (object)json_decode('{"id":"1732666","name":"Toopt","website":"https://fruitbat.studio","redirect_uri":"urn:ietf:wg:oauth:2.0:oob","client_id":"EDsOc0G89lkV8t_7unv1D_W7QHyS-tG0rue2_t6OU9s","client_secret":"xloIt6mGfcc8betgdcO5UHKtF9PQV51-w_lo-EWYFBw","vapid_key":"BCk-QqERU0q-CfYZjcuB6lnyyOYfJ2AifKqfeGIm7Z-HiTU5T9eTG5GxVA0_OH5mMlI4UkkDTpaZwozy0TzdZ2M="}');
+//return (object)json_decode('{"id":"1732666","name":"Toopt","website":"https://fruitbat.studio","redirect_uri":"urn:ietf:wg:oauth:2.0:oob","client_id":"EDsOc0G89lkV8t_7unv1D_W7QHyS-tG0rue2_t6OU9s","client_secret":"xloIt6mGfcc8betgdcO5UHKtF9PQV51-w_lo-EWYFBw","vapid_key":"BCk-QqERU0q-CfYZjcuB6lnyyOYfJ2AifKqfeGIm7Z-HiTU5T9eTG5GxVA0_OH5mMlI4UkkDTpaZwozy0TzdZ2M="}');
 
         $result = curl_exec($ch);
         $header = curl_getinfo($ch,  CURLINFO_RESPONSE_CODE);
         if($header !== 201 && $header !== 200) {
-            print_r($result);
-            print_r($header);
-            print_r(curl_error($ch));
+            curl_close($ch);
+            throw new Exception("Call to $url returned $header");
+        }
+        curl_close($ch);
+        return json_decode($result);
+    }
+
+    public function get(String $url, String $accessToken = null):Object
+    {
+        $headers = [
+            'Accept: application/json',
+        ];
+        if($accessToken) {
+            $headers[] = "Authorization: Bearer ".$accessToken;
+        }
+        print "in get with headers...".PHP_EOL;
+        print_r($headers);
+        print "with url".PHP_EOL;
+        print $url;
+
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'GET' );
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_FAILONERROR, true);
+
+//return (object)json_decode('{"id":"1732666","name":"Toopt","website":"https://fruitbat.studio","redirect_uri":"urn:ietf:wg:oauth:2.0:oob","client_id":"EDsOc0G89lkV8t_7unv1D_W7QHyS-tG0rue2_t6OU9s","client_secret":"xloIt6mGfcc8betgdcO5UHKtF9PQV51-w_lo-EWYFBw","vapid_key":"BCk-QqERU0q-CfYZjcuB6lnyyOYfJ2AifKqfeGIm7Z-HiTU5T9eTG5GxVA0_OH5mMlI4UkkDTpaZwozy0TzdZ2M="}');
+
+        $result = curl_exec($ch);
+        $header = curl_getinfo($ch,  CURLINFO_RESPONSE_CODE);
+        if($header !== 201 && $header !== 200) {
+            curl_close($ch);
             throw new Exception("Call to $url returned $header");
         }
         curl_close($ch);
