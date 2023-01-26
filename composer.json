@@ -1,0 +1,23 @@
+{
+    "require-dev": {
+        "phpstan/phpstan": "^1.9",
+        "phpunit/phpunit": "^9.5",
+        "gbhorwood/pollinate": "^0.0.3",
+        "mikey179/vfsstream": "^1.6",
+        "php-mock/php-mock-phpunit": "^2.6"
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/",
+            "Tests\\Unit\\": "tests/Unit",
+            "Tests\\Traits\\": "tests/Traits"
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Tests\\": "tests/",
+            "Tests\\Unit\\": "tests/Unit",
+            "Tests\\Traits\\": "tests/Traits"
+        }
+    }
+}
