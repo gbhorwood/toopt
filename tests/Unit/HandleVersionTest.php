@@ -16,8 +16,8 @@ class HandleVersionTest extends TestCase
      */
     public function testHandleVersionIsRun()
     {
+        $argv = ['scriptname', '--version'];
         include_once('toopt.php');
-        $argv = ['toopt.php', '--version'];
 
         $api = new \gbhorwood\toopt\Api();
         $toopt = new \gbhorwood\toopt\Toopt($api);
@@ -41,8 +41,8 @@ class HandleVersionTest extends TestCase
      */
     public function testHandleVersionIsNotRun()
     {
+        $argv = ['scriptname'];
         include_once('toopt.php');
-        $argv = ['toopt.php'];
 
         $api = new \gbhorwood\toopt\Api();
         $toopt = new \gbhorwood\toopt\Toopt($api);

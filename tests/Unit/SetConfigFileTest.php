@@ -21,6 +21,7 @@ class SetConfigFileTest extends TestCase
      */
     public function testSetConfigFile()
     {
+        $argv = ['scriptname'];
         include_once('toopt.php');
 
         /**
@@ -58,6 +59,7 @@ class SetConfigFileTest extends TestCase
      */
     public function testSetConfigFileFileIsMissing()
     {
+        $argv = ['scriptname'];
         include_once('toopt.php');
 
         /**
@@ -93,6 +95,7 @@ class SetConfigFileTest extends TestCase
      */
     public function testSetConfigFileTooptDirIsMissing()
     {
+        $argv = ['scriptname'];
         include_once('toopt.php');
 
         /**
@@ -126,6 +129,7 @@ class SetConfigFileTest extends TestCase
      */
     public function testSetConfigFileConfigDirIsMissing()
     {
+        $argv = ['scriptname'];
         include_once('toopt.php');
 
         /**
@@ -162,6 +166,7 @@ class SetConfigFileTest extends TestCase
      */
     public function testSetConfigFileErrorTooptIsFile()
     {
+        $argv = ['scriptname'];
         include_once('toopt.php');
 
         $structure = [
@@ -203,6 +208,6 @@ class SetConfigFileTest extends TestCase
     {
         $fileSystem =  vfsStream::setup('home');
         vfsStream::create($structure, $fileSystem);
-        return $fileSystem->url().'/'.$this->configFileLocation;
+        return $fileSystem->url().DIRECTORY_SEPARATOR.$this->configFileLocation;
     }
 }

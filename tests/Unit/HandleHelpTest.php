@@ -16,8 +16,8 @@ class HandleHelpTest extends TestCase
      */
     public function testHandleHelpIsRun()
     {
+        $argv = ['scriptname', '--help'];
         include_once('toopt.php');
-        $argv = ['toopt.php', '--help'];
 
         $api = new \gbhorwood\toopt\Api();
         $toopt = new \gbhorwood\toopt\Toopt($api);
@@ -41,8 +41,8 @@ class HandleHelpTest extends TestCase
      */
     public function testHandleHelpIsNotRun()
     {
+        $argv = ['scriptname'];
         include_once('toopt.php');
-        $argv = ['toopt.php'];
 
         $api = new \gbhorwood\toopt\Api();
         $toopt = new \gbhorwood\toopt\Toopt($api);

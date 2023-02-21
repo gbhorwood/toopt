@@ -14,7 +14,7 @@ trait ReflectionTrait {
      * @param  Toopt $toopt      The Toopt object
      * @param  String $property  The string of the property name
      */
-    public function getInaccessibleProperty(\gbhorwood\toopt\Toopt $tooptObject, String $property):Array
+    public function getInaccessibleProperty(\gbhorwood\toopt\Toopt $tooptObject, String $property)
     {
         $tooptClass = new \ReflectionClass($tooptObject);
         $reflecteProperty = $tooptClass->getProperty($property);

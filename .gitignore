@@ -15,3 +15,4 @@ vendor
 .phpunit.result.cache
 swagger/node_modules
 og*
+vfs:*

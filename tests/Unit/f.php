@@ -1,76 +1,53 @@
 <?php
 namespace Tests\Unit;
 
+
 use PHPUnit\Framework\TestCase;
-use org\bovigo\vfs\vfsStream;
-use org\bovigo\vfs\vfsStreamDirectory;
 use \Tests\Traits\ReflectionTrait;
 
 class f extends TestCase
 {
+
     use ReflectionTrait;
 
     /**
-     * The path to the config file in the 'home' directory
-     */
-    private String $configFileLocation = ".config/toopt/toopt.json";
-
-    /**
-     * Test valid config account
+     * Test parseArgs()
      *
+     * @dataProvider argvProvider
      */
-    public function testSetConfigFile()
+    public function testParseArgs($argv, $expected)
     {
         include_once('toopt.php');
 
+        $api = new \gbhorwood\toopt\Api();
+        $toopt = new \gbhorwood\toopt\Toopt($api);
 
-        /**
-         * Build config directory structure
-         * empty toopt.json
-         */
-        $structure = [
-            '.config' => [
-                'toopt' => [
-                    'toopt.json' => ''
-                ]
-            ]
-        ];
-        $configFilePath = $this->buildFileSystem($structure);
+        $toopt->parseargs($argv);
 
-        /**
-         * Mock getConfigFilePath()
-         */
-        $api = new \Api();
-        $this->makeAccessible(\Toopt::class, 'getConfigFilePath');
-        $tooptStub = $this->getMockBuilder(\Toopt::class)
-                        ->setConstructorArgs([$api])
-                        ->setMethods(["getConfigFilePath"])
-                        ->getMock();
+        $selectedArgs = $this->getInaccessibleProperty($toopt, 'args');
 
-        print "---->".get_class($tooptStub).PHP_EOL;
-        $this->makeAccessible('\\'.get_class($tooptStub), 'getConfigFilePath');
+        $this->assertEquals($selectedArgs, $expected);
 
-
-        $tooptStub->method('getConfigFilePath')
-                ->will($this->onConsecutiveCalls($configFilePath));
-
-
-        $tooptStub->setConfigFile();
-        $this->assertEquals('', file_get_contents($configFilePath));
-        $this->assertTrue(file_exists($configFilePath));
     }
-
 
     /**
-     * Scaffold fake filesystem
+     * Provide $argv and expeted content of toopt->args
      *
-     * @param  Array  The array that defines the file strcture in vfsstream
-     * @return String The path to the config file we expect
+     * @return Array
      */
-    private function buildFileSystem(Array $structure):String
+    public function argvProvider():Array
     {
-        $fileSystem =  vfsStream::setup('home');
-        vfsStream::create($structure, $fileSystem);
-        return $fileSystem->url().'/'.$this->configFileLocation;
-    }
+        return [
+            [ ['scriptname', '--one', 'positional1'], ['one' => 1, 'positional' => ['positional1']] ],
+            [ ['scriptname', '-vvv', 'positional1'], ['v' => 3, 'positional' => ['positional1']] ],
+            [ ['scriptname', '-v', '-v', '-v', 'positional1'], ['v' => 3, 'positional' => ['positional1']] ],
+            [ ['scriptname', '--foo=bar', 'positional1'], ['foo' => 'bar', 'positional' => ['positional1']] ],
+            [ ['scriptname', '--foo=bar', '--foo=baz', 'positional1'], ['foo' => 'baz', 'positional' => ['positional1']] ],
+            [ ['scriptname', '--foo="multi word arg"', 'positional1'], ['foo' => '"multi word arg"', 'positional' => ['positional1']] ],
+            [ ['scriptname', '-vvv', 'positional1', 'positional2'], ['v' => 3, 'positional' => ['positional1', 'positional2']] ],
+            [ ['scriptname', 'positional1', '-v', 'positional2'], ['v' => 1, 'positional' => ['positional1', 'positional2']] ],
+            [ ['scriptname', 'positional1', '-v', '"multi word positional2"'], ['v' => 1, 'positional' => ['positional1', '"multi word positional2"']] ],
+        ];
+    } // argvProvider
+
 }

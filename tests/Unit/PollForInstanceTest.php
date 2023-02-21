@@ -18,6 +18,7 @@ class PollForInstanceTest extends TestCase
      */
     public function testPollForInstanceSuccess($validInstance)
     {
+        $argv = ['scriptname'];
         include_once('toopt.php');
 
         /**
@@ -45,6 +46,7 @@ class PollForInstanceTest extends TestCase
      */
     public function testPollForInstanceValidation()
     {
+        $argv = ['scriptname'];
         include_once('toopt.php');
 
         $validInstance = 'mastodon.social';
@@ -87,6 +89,7 @@ class PollForInstanceTest extends TestCase
 
 
     /**
+     * Instance test data
      *
      * @return Array
      */
@@ -96,5 +99,5 @@ class PollForInstanceTest extends TestCase
             [ 'mastodon.social' ],
             [ 'phpc.social' ],
         ];
-    } // argvProvider
+    } // instanceProvider
 }

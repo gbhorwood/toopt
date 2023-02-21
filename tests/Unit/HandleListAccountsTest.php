@@ -21,6 +21,7 @@ class HandleListAccountsTest extends TestCase
      */
     public function testHandleListAccounts()
     {
+        $argv = ['scriptname'];
         include_once('toopt.php');
 
         $configJson =<<<JSON
@@ -67,7 +68,7 @@ class HandleListAccountsTest extends TestCase
         $tooptStub->method('getConfigFilePath')
                 ->will($this->onConsecutiveCalls($configFilePath));
 
-        $argv = ['toopt.php', '--list-accounts'];
+        $argv = ['scriptname', '--list-accounts'];
         $tooptStub->parseargs($argv);
         $tooptStub->setConfigFile();
 
@@ -91,6 +92,7 @@ class HandleListAccountsTest extends TestCase
      */
     public function testHandleListAccountsNoAccounts()
     {
+        $argv = ['scriptname'];
         include_once('toopt.php');
 
         $configJson = '';
@@ -119,7 +121,7 @@ class HandleListAccountsTest extends TestCase
         $tooptStub->method('getConfigFilePath')
                 ->will($this->onConsecutiveCalls($configFilePath));
 
-        $argv = ['toopt.php', '--list-accounts'];
+        $argv = ['scriptname', '--list-accounts'];
         $tooptStub->parseargs($argv);
         $tooptStub->setConfigFile();
 

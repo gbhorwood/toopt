@@ -17,6 +17,7 @@ class PollForEmailTest extends TestCase
      */
     public function testPollForEmailSuccess($validEmail)
     {
+        $argv = ['scriptname'];
         include_once('toopt.php');
 
         /**
@@ -39,11 +40,12 @@ class PollForEmailTest extends TestCase
     }
 
     /**
-     * Test invalid data entered on STDIN is ignored until valid data
+     * Test invalid data entered on STDIN is ignored until valid data entered
      * 
      */
     public function testPollForEmailValidation()
     {
+        $argv = ['scriptname'];
         include_once('toopt.php');
 
         $validEmail = 'gbhorwood@example.ca';

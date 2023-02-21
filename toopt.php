@@ -15,7 +15,7 @@ define('PHP_MIN_VERSION', 8.1);
 /**
  * Path to config file in user's home directory
  */
-define('CONFIG_FILE', '.config/toopt/toopt.json');
+define('CONFIG_FILE', '.config'.DIRECTORY_SEPARATOR.'toopt'.DIRECTORY_SEPARATOR.'toopt.json');
 
 /**
  * Mastodon client app configurations
@@ -24,6 +24,11 @@ define('MASTODON_CLIENT_NAME', 'Toopt');
 define('MASTODON_SCOPES', 'read write follow');
 define('MASTODON_CLIENT_WEBSITE', 'https://fruitbat.studio');
 define('MASTODON_REDIRECT_URIS', 'urn:ietf:wg:oauth:2.0:oob');
+
+/**
+ * Tell phpunit when using processIsolation what STDIN is
+ */
+if(!defined('STDIN')) define('STDIN', fopen("php://stdin","r"));
 
 /**
  * Convenience defines of meta characters for ANSI
@@ -84,13 +89,9 @@ cli_set_process_title("toopt");
 
 /**
  * Script start
+ * Run only if executed on cli
  */
-if(!getenv('TESTENVIRONMENT')) {
-    run($argv);
-}
-
-function run($argv) 
-{
+if(basename($argv[0]) == basename(__FILE__)) {
     try {
         $api = new Api();
         $toopt = new Toopt($api);
@@ -361,6 +362,7 @@ class Toopt
             $instance = $this->pollForInstance();
             $username = $this->pollForEmail();
             $password = $this->pollForPassword();
+            print "got == $instance $username $password".PHP_EOL;die();
 
             // create app
             $app = $this->createApp($instance);
@@ -423,7 +425,7 @@ class Toopt
      *
      * @return String  The mastodon instance
      */
-    private function pollForInstance():String
+    protected function pollForInstance():String
     {
         $prompt = "instance: ";
 
@@ -447,7 +449,7 @@ class Toopt
      *
      * @return String The email
      */
-    private function pollForEmail():String
+    protected function pollForEmail():String
     {
         $prompt = "email: ";
 
@@ -471,7 +473,7 @@ class Toopt
      *
      * @return String The password entered
      */
-    private function pollForPassword():String
+    protected function pollForPassword():String
     {
         // suppress echo
         readline_callback_handler_install("", function(){});
@@ -552,7 +554,7 @@ class Toopt
     {
         $endpoint = "https://$instance/api/v1/accounts/verify_credentials";
         try {
-            return $this->api->get($endpoint, $accessToken);
+            return  $this->api->get($endpoint, $accessToken);
         }
         catch (Exception $e) {
             $this->error("Could not verify account. ".$e->getMessage());
@@ -665,7 +667,7 @@ class Toopt
      *
      * @return String
      */
-    private function getContent():String
+    protected function getContent():String
     {
         $content = $this->readPipeContent();
         $content = $content ? $content : $this->readArgContent();
@@ -684,7 +686,7 @@ class Toopt
      *
      * @return ?String
      */
-    private function readPipeContent():?String
+    protected function readPipeContent():?String
     {
         $streams = [STDIN];
         $write_array = [];
@@ -709,7 +711,7 @@ class Toopt
      *
      * @return ?String
      */
-    private function readArgContent():?String
+    protected function readArgContent():?String
     {
         $argContent = isset($this->args['positional'][0]) ? $this->args['positional'][0] : null;
 
@@ -847,7 +849,7 @@ class Toopt
      */
     protected function getConfigFilePath():String
     {
-        return posix_getpwuid(posix_getuid())['dir'].'/'.CONFIG_FILE;
+        return posix_getpwuid(posix_getuid())['dir'].DIRECTORY_SEPARATOR.CONFIG_FILE;
     }
 
     /**
@@ -884,10 +886,6 @@ class Toopt
         }
         // use default
         else {
-            if(!array_key_exists('default', $configArray)) {
-                $this->error("No default account exists.");
-                throw new \Exception(1);
-            }
             $accountConfig = $configArray['accounts'][$configArray['default']];
         }
 
@@ -1005,7 +1003,7 @@ Class Api {
         $header = curl_getinfo($ch,  CURLINFO_RESPONSE_CODE);
         if($header !== 201 && $header !== 200) {
             curl_close($ch);
-            throw new Exception("Call to $url returned $header");
+            throw new \Exception("Call to $url returned $header");
         }
         curl_close($ch);
         return json_decode($result);
