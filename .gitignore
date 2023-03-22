@@ -1,0 +1,18 @@
+# Node artifact files
+
+# Log files
+
+# gbh
+node_modules/
+dist/
+.env
+tags
+tags.lock
+*.log
+upload
+vendor
+.php_cs.cache
+.phpunit.result.cache
+swagger/node_modules
+og*
+vfs:*
