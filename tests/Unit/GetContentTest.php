@@ -50,7 +50,7 @@ class GetContentTest extends TestCase
 
         $pipeContent = $getContent->invoke($tooptStub);
 
-        $this->assertEquals($pipeContent, $validPipeContent);
+        $this->assertEquals($pipeContent[0], $validPipeContent);
     }
 
     /**
@@ -75,7 +75,7 @@ class GetContentTest extends TestCase
                         ->setMethods(['readArgContent'])
                         ->getMock();
         $tooptStub->method('readArgContent')
-                ->will($this->onConsecutiveCalls($validArgContent));
+                ->will($this->onConsecutiveCalls([$validArgContent]));
 
         /**
          * Set getContent to accessible
@@ -86,7 +86,7 @@ class GetContentTest extends TestCase
 
         $pipeContent = $getContent->invoke($tooptStub);
 
-        $this->assertEquals($pipeContent, $validArgContent);
+        $this->assertEquals($pipeContent[0], $validArgContent);
     }
 
     /**
@@ -103,6 +103,7 @@ class GetContentTest extends TestCase
          */
         $api = new \gbhorwood\toopt\Api();
         $toopt = new \gbhorwood\toopt\Toopt($api);
+        $toopt->parseargs($argv);
         $getContentMethod = $this->setAccessible('getContent');
 
         try {

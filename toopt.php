@@ -81,7 +81,6 @@ define('CRITICAL', "[".ESC."[".RED."mCRITICAL".CLOSE_ANSI."] ");
 define('ALERT', "[".ESC."[".RED."mALERT".CLOSE_ANSI."] ");
 define('EMERGENCY', "[".ESC."[".RED."mEMERGENCY".CLOSE_ANSI."] ");
 
-
 /**
  * Set the title of our script that ps(1) sees
  */
@@ -106,6 +105,7 @@ if(basename($argv[0]) == basename(__FILE__)) {
         $toopt->toot();
         Toopt::exit(0);
     }
+    // On exception exit with exit code passed in exception
     catch(\Exception $e) {
         Toopt::exit((int)$e->getMessage());
     }
@@ -161,6 +161,7 @@ class Toopt
      */
     public function parseargs(Array $args):void
     {
+        $this->args['positional'] = [];
         $args = array_slice($args, 1);
         for ($i=0;$i<count($args);$i++) {
 
@@ -172,7 +173,7 @@ class Toopt
                     break;
 
                 case 2:
-                    $this->args[ltrim(preg_replace("/=.*/", '', $args[$i]), '-')] = strpos($args[$i], '=') !== false ? substr($args[$i], strpos($args[$i], '=') + 1) : 1;
+                    $this->args[ltrim(preg_replace("/=.*/", '', $args[$i]), '-')][] = strpos($args[$i], '=') !== false ? substr($args[$i], strpos($args[$i], '=') + 1) : 1;
                     break;
 
                 default:
@@ -186,6 +187,7 @@ class Toopt
      * Terminate on failure
      *
      * @return void
+     * @throws Exception Terminates script
      */
     public function preflight():void
     {
@@ -208,7 +210,7 @@ class Toopt
             $preflightFailures[] = "Extention 'curl' is required";
         }
 
-        // dump errors, if any, and kill script
+        // on validation fail, dump errors and kill script
         if(count($preflightFailures) > 0) {
             array_map(fn($f) => $this->error($f), $preflightFailures);
             $this->error('exiting');
@@ -257,14 +259,22 @@ class Toopt
 
           $ toopt.php /path/to/file
           Toot content in textfile
+
+          $ toopt.php /path/to/toot1.txt /path/to/toot2
+          Toot content in textfiles as a thread
+
+          $ toopt.php "some toot" "next toot"
+          Toot strings as a thread
+
+          $ toopt.php "some toot" /path/to/secondtoot "final toot"
+          Toot strings and files as a thread
         TXT;
 
         if(isset($this->args['help'])) {
             $this->writeOut($helpOutput);
-            throw new \Exception(0);
+            throw new \Exception(0); // script exit with 0
         }
     }
-
 
     /**
      * Output version if the --version argument has been parsed into the $args array
@@ -277,7 +287,7 @@ class Toopt
     {
         if(isset($this->args['version'])) {
             $this->writeOut(VERSION);
-            throw new \Exception(0);
+            throw new \Exception(0); // script exit with 0
         }
     }
 
@@ -336,6 +346,7 @@ class Toopt
      * Terminates script
      *
      * @return void
+     * @throws Exception Terminates script
      */
     public function handleListAccounts():void
     {
@@ -343,7 +354,7 @@ class Toopt
             if(isset($this->configFile)) {
                 $this->outputListAccount();
             }
-            throw new \Exception(0);
+            throw new \Exception(0); // script exit with 0
         }
     }
 
@@ -354,6 +365,7 @@ class Toopt
      * Terminates script
      *
      * @return void
+     * @throws Exception Terminates script
      */
     public function handleAddAccount():void
     {
@@ -362,7 +374,6 @@ class Toopt
             $instance = $this->pollForInstance();
             $username = $this->pollForEmail();
             $password = $this->pollForPassword();
-            print "got == $instance $username $password".PHP_EOL;die();
 
             // create app
             $app = $this->createApp($instance);
@@ -380,42 +391,61 @@ class Toopt
             // dump list of accounts
             $this->outputListAccount();
 
-            throw new \Exception(0);
+            throw new \Exception(0); // script exit with 0
         }
     }
 
     /**
-     * Set the content warning if any.
+     * Set the content warning if the --cw argument has been parsed into
+     * the args array
      *
      * @return void
      */
     public function handleCw():void
     {
-        $this->cw = isset($this->args['cw']) ? $this->args['cw'] : null;
+        $this->cw = isset($this->args['cw']) ? $this->args['cw'][0] : null;
     }
 
-
+    /**
+     * Validates credentials, builds toot content with optional threading,
+     * posts toot
+     *
+     * @return void
+     */
     public function toot():void
     {
-        // get user access token
+        /**
+         * Get user access token
+         */
         $credentials = $this->getAccountCredentials();
 
-        // call verify credentials on mastodon instance
+        /**
+         * Call verify credentials on mastodon instance
+         */
         $this->doVerifyCredentials($credentials['instance'], $credentials['access_token']);
 
-        // get the tootable content for this thread
-        $content = $this->getContent();
+        /**
+         * Get array of tootable text content
+         */
+        $contentArray = $this->getContent();
 
-        // convert to a thread
-        $contentArray = $this->threadify($content);
+        /**
+         * Single toot content threaded if necessary
+         */
+        $contentArray = count($contentArray) > 1 ? $contentArray : $this->threadify($contentArray[0]);
 
-
+        /**
+         * Post toot
+         */
         $toot = array_shift($contentArray);
-        $response = $this->doToot($credentials['instance'], $toot['text'], $this->cw, null, $credentials['access_token']);
+        $response = $this->doToot($credentials['instance'], $toot, $this->cw, null, $credentials['access_token']);
 
+        /**
+         * Post rest of toots in thread if necessary
+         */
         if(count($contentArray)) {
             array_map(fn($t) => 
-                $this->doToot($credentials['instance'], $t['text'], $this->cw, $response->id, $credentials['access_token']),
+                $this->doToot($credentials['instance'], $t, $this->cw, $response->id, $credentials['access_token']),
                 $contentArray);
         }
     }
@@ -478,6 +508,7 @@ class Toopt
         // suppress echo
         readline_callback_handler_install("", function(){});
 
+        // array of characters of the password
         $passwordCharArray = [];
 
         // output 'password:' prompt
@@ -562,7 +593,18 @@ class Toopt
         }
     }
 
-    private function doToot(String $instance, String $content, ?String $cw, ?Int $inReplyToId, String $accessToken)
+    /**
+     * Post toot to instance.
+     *
+     * @param  String  $instance The instance fqdn the toot is posted to, ie mastodon.social
+     * @param  String  $content The text content of the toot
+     * @param  ?String $cw The content warning/spoiler, if any
+     * @param  ?Int    $inReplyToId The id of the toot this toot is in reply to, if any
+     * @param  ?String $accessToken The access token of the user
+     * @return stdClass
+     * @throws Exception Terminates script
+     */
+    private function doToot(String $instance, String $content, ?String $cw, ?Int $inReplyToId, String $accessToken):\stdClass
     {
         $endpoint = "https://$instance/api/v1/statuses";
 
@@ -570,10 +612,12 @@ class Toopt
             'status' => $content,
         ];
 
+        // handle content warning, if any
         if($cw !== null) {
             $payload['spoiler_text'] = trim($cw).PHP_EOL;
         }
         
+        // set follow-up toots in thread to visibility 'unlisted'
         $payload['visibility'] = 'public';
         if($inReplyToId !== null) {
             $payload['in_reply_to_id'] = $inReplyToId;
@@ -592,9 +636,10 @@ class Toopt
     }
 
     /**
-     * Calls instance identified by $instance using app identified iwth $clientId and
+     * Do Oauth login
+     * Calls instance identified by $instance using app identified with $clientId and
      * $clientSecret to log in user using credentials $username and $password. Returns
-     * results as object, including * $access_token
+     * results as object, including $access_token
      * Terminates on error.
      *
      * @param  String $instance
@@ -639,7 +684,6 @@ class Toopt
      */
     private function writeConfig(String $userAddress, String $instance, String $clientId, String $clientSecret, String $accessToken):void
     {
-
         // read in existing config if any
         $configArray = json_decode(file_get_contents($this->configFile) ?? [], true);
 
@@ -665,20 +709,20 @@ class Toopt
      *   - positional file
      *   - positional string
      *
-     * @return String
+     * @return Array
+     * @throws Exception Terminates script
      */
-    protected function getContent():String
+    protected function getContent():Array
     {
         $content = $this->readPipeContent();
-        $content = $content ? $content : $this->readArgContent();
-        $content = trim($content);
+        $content = $content ? [trim($content)] : $this->readArgContent();
 
-        if(strlen($content) == 0) {
+        if(!$content) {
             $this->error("No content");
             throw new \Exception(1);
         }
 
-        return $content;
+        return array_filter($content);
     }
 
     /**
@@ -706,24 +750,28 @@ class Toopt
     }
 
     /**
-     * Read toot content from positional argument, either the content of a text file
-     * given as the argument or the string literal passed as the argument.
+     * Read toot content from positional argument(s), either the content of a text file(s)
+     * given as the argument or the string literal(s) passed as the argument.
      *
-     * @return ?String
+     * If mutliple arguments are given with content they are concatenated.
+     *
+     * @return ?Array
      */
-    protected function readArgContent():?String
+    protected function readArgContent():?Array
     {
-        $argContent = isset($this->args['positional'][0]) ? $this->args['positional'][0] : null;
+        if(count($this->args['positional'])) {
+            $argContentArray = array_map(function($p) {
+                if(is_file($p)) {
+                    $extension = @pathinfo($p)['extension'];
+                    return in_array(strtolower($extension), ['txt', null]) ? file_get_contents($p) : null;
+                }
+                return $p;
+            }, $this->args['positional']);
 
-        if(is_file($argContent)) {
-            $extension ??= @pathinfo($argContent)['extension'];
-            if(in_array($extension, ['txt', null])) {
-                return file_get_contents($argContent);
-            }
-            return null;
+            return $argContentArray;
         }
 
-        return $argContent;
+        return null;
     }
 
     /**
@@ -746,7 +794,6 @@ class Toopt
             BOLD_ANSI."Available accounts:".CLOSE_ANSI.PHP_EOL.join($outputArray) :
             "There are no accounts. Please add an account with --add-account";
 
-        //fwrite(STDOUT, $output);
         $this->writeOut($output);
     }
 
@@ -772,10 +819,7 @@ class Toopt
 
             // post too short for threading. return.
             if(strlen($str) < $this->maxchars) {
-                $thread[] = [
-                    'text' => $str.$pageTag,
-                    'uploads' => [],
-                ];
+                $thread[] = $str.$pageTag;
                 return $thread;
             }
 
@@ -813,8 +857,7 @@ class Toopt
             // substring for this toot is head. add to accumulator.
             $pos = strrpos(substr($str, 0, $this->maxchars), $threadEndChar)+1;
             $thread[] = [
-                'text' => substr($str, 0, $pos).$pageTag,
-                'uploads' => [],
+                substr($str, 0, $pos).$pageTag,
             ];
 
             // tail call
@@ -857,6 +900,7 @@ class Toopt
      * Terminates on error
      *
      * @return Array
+     * @throws Exception Terminates script
      */
     private function getAccountCredentials():Array
     {
@@ -877,12 +921,12 @@ class Toopt
 
         // handle --account= arg
         if(isset($this->args['account'])) {
-            if(!array_key_exists($this->args['account'], $configArray['accounts'])) {
-                $this->error("The account '".$this->args['account']."' does not exist. Try a different account, or adding an account with --add-account");
+            if(!array_key_exists($this->args['account'][0], $configArray['accounts'])) {
+                $this->error("The account '".$this->args['account'][0]."' does not exist. Try a different account, or adding an account with --add-account");
                 $this->outputListAccount();
                 throw new \Exception(1);
             }
-            $accountConfig = $configArray['accounts'][$this->args['account']];
+            $accountConfig = $configArray['accounts'][$this->args['account'][0]];
         }
         // use default
         else {
@@ -945,15 +989,33 @@ class Toopt
 
     /**
      * Terminates the script with exit code $exitCode
+     *
+     * @param  Int $exitCode The exit code for the script. 0 for success. All others are error.
+     * @return void
      */
     public static function exit(Int $exitCode = 1):void
     {
         exit($exitCode);
     }
-}
+} // class Toopt
 
+
+/**
+ * Api
+ *
+ * Class containing methods to curl instance
+ */
 Class Api {
     
+    /**
+     * POST to instance via curl
+     *
+     * @param  String $url The full url to POST to
+     * @param  Array  $payload The payload to send as an array
+     * @param  String $accessToken The access token of the account, if any
+     * @return Object The api response object
+     * @throws Exception
+     */
     public function post(String $url, Array $payload, String $accessToken = null):Object
     {
         $headers = [
@@ -963,25 +1025,35 @@ Class Api {
         if($accessToken) {
             $headers[] = "Authorization: Bearer ".$accessToken;
         }
+
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_FAILONERROR, true);
 
-//return (object)json_decode('{"id":"1732666","name":"Toopt","website":"https://fruitbat.studio","redirect_uri":"urn:ietf:wg:oauth:2.0:oob","client_id":"EDsOc0G89lkV8t_7unv1D_W7QHyS-tG0rue2_t6OU9s","client_secret":"xloIt6mGfcc8betgdcO5UHKtF9PQV51-w_lo-EWYFBw","vapid_key":"BCk-QqERU0q-CfYZjcuB6lnyyOYfJ2AifKqfeGIm7Z-HiTU5T9eTG5GxVA0_OH5mMlI4UkkDTpaZwozy0TzdZ2M="}');
-
         $result = curl_exec($ch);
         $header = curl_getinfo($ch,  CURLINFO_RESPONSE_CODE);
+
         if($header !== 201 && $header !== 200) {
             print curl_error($ch);
             curl_close($ch);
             throw new Exception("Call to $url returned $header");
         }
+
         curl_close($ch);
+
         return json_decode($result);
     }
 
+    /**
+     * GET from instance via curl
+     *
+     * @param  String $url The full url to GET from
+     * @param  String $accessToken The access token of the account, if any
+     * @return Object The api response object
+     * @throws Exception
+     */
     public function get(String $url, String $accessToken = null):Object
     {
         $headers = [
@@ -997,18 +1069,19 @@ Class Api {
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_FAILONERROR, true);
 
-//return (object)json_decode('{"id":"1732666","name":"Toopt","website":"https://fruitbat.studio","redirect_uri":"urn:ietf:wg:oauth:2.0:oob","client_id":"EDsOc0G89lkV8t_7unv1D_W7QHyS-tG0rue2_t6OU9s","client_secret":"xloIt6mGfcc8betgdcO5UHKtF9PQV51-w_lo-EWYFBw","vapid_key":"BCk-QqERU0q-CfYZjcuB6lnyyOYfJ2AifKqfeGIm7Z-HiTU5T9eTG5GxVA0_OH5mMlI4UkkDTpaZwozy0TzdZ2M="}');
-
         $result = curl_exec($ch);
         $header = curl_getinfo($ch,  CURLINFO_RESPONSE_CODE);
+
         if($header !== 201 && $header !== 200) {
             curl_close($ch);
             throw new \Exception("Call to $url returned $header");
         }
+
         curl_close($ch);
+
         return json_decode($result);
     }
-}
+} // class Api
 
 
 

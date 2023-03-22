@@ -34,7 +34,7 @@ class ReadArgContentTest extends TestCase
 
         $argContent = $readArgContent->invoke($toopt);
 
-        $this->assertEquals($argContent, $validArgContent);
+        $this->assertEquals($argContent[0], $validArgContent);
     }
 
     /**
@@ -94,7 +94,7 @@ class ReadArgContentTest extends TestCase
         $argv = ['scriptname', $contentFilePath.DIRECTORY_SEPARATOR."directory".DIRECTORY_SEPARATOR."file.txt"];
         $toopt->parseargs($argv);
         $argContent = $readArgContent->invoke($toopt);
-        $this->assertEquals($argContent, $validArgContent);
+        $this->assertEquals($argContent[0], $validArgContent);
 
         /**
          * Test file with no extension
@@ -104,7 +104,7 @@ class ReadArgContentTest extends TestCase
         $argv = ['scriptname', $contentFilePath.DIRECTORY_SEPARATOR."directory".DIRECTORY_SEPARATOR."other"];
         $toopt->parseargs($argv);
         $argContent = $readArgContent->invoke($toopt);
-        $this->assertEquals($argContent, $validArgContent);
+        $this->assertEquals($argContent[0], $validArgContent);
 
         /**
          * Test file with no extension
@@ -114,7 +114,7 @@ class ReadArgContentTest extends TestCase
         $argv = ['scriptname', $contentFilePath.DIRECTORY_SEPARATOR."directory".DIRECTORY_SEPARATOR."jpgfile.jpg"];
         $toopt->parseargs($argv);
         $argContent = $readArgContent->invoke($toopt);
-        $this->assertEquals($argContent, null);
+        $this->assertEquals($argContent[0], null);
     }
 
     /**
