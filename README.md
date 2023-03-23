@@ -17,11 +17,12 @@ Toopt is written in PHP and requires the following:
 - the PHP posix extension
 - the PHP curl extension
 
-## Adding and managing accounts
-Before using `toopt`, you need to set up your account or accounts.
 
 ## Usage
 There are two usage activities: managing accounts, and posting toots.
+
+## Adding and managing accounts
+Before using `toopt`, you need to set up your account or accounts.
 
 ### Adding an account
 To add a new account, call `toopt` with the `--add-account` argument:

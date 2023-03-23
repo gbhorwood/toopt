@@ -435,6 +435,11 @@ class Toopt
         $contentArray = count($contentArray) > 1 ? $contentArray : $this->threadify($contentArray[0]);
 
         /**
+         * Add page footers to each toot
+         */
+        $contentArray = $this->addPageFooters($contentArray);
+        
+        /**
          * Post toot
          */
         $toot = array_shift($contentArray);
@@ -445,8 +450,7 @@ class Toopt
          */
         if(count($contentArray)) {
             array_map(fn($t) => 
-                $this->doToot($credentials['instance'], $t, $this->cw, $response->id, $credentials['access_token']),
-                $contentArray);
+                $this->doToot($credentials['instance'], $t, $this->cw, $response->id, $credentials['access_token']), $contentArray);
         }
     }
 
@@ -722,7 +726,7 @@ class Toopt
             throw new \Exception(1);
         }
 
-        return array_filter($content);
+        return array_values(array_filter($content));
     }
 
     /**
@@ -798,6 +802,23 @@ class Toopt
     }
 
     /**
+     * Add the page footers to each toot in the contentArray if
+     * required.
+     *
+     * @param  Array $contentArray
+     * @return Array
+     */
+    private function addPageFooters(Array $contentArray):Array
+    {
+        if(count($contentArray) > 0) {
+            array_walk($contentArray, function(&$v, $k) use($contentArray) {
+                $v = $v.PHP_EOL.($k+1)."/".count($contentArray);
+            });
+        }
+        return $contentArray;
+    }
+
+    /**
      * Takes the toot content string as $t and returns array of toots to be threaded.
      * 
      * @param  String $t The content to post
@@ -805,21 +826,15 @@ class Toopt
      */
     private function threadify(String $t):Array
     {
-        // calculate number of posts in thread
-        $pageCount = ceil(strlen($t)/ $this->maxchars);
-
         /**
          * Tail recurse to build array of toots
          */
-        $threadify = function($str, $pageCount, $thread = [], $page = 1) use ( &$threadify ):Array {
+        $threadify = function($str, $thread = []) use ( &$threadify ):Array {
             $str = trim($str);
             
-            // build page tag to put at bottom of post, ie. 1/2
-            $pageTag = $pageCount > 1 ? PHP_EOL.$page++.'/'.$pageCount : null;
-
             // post too short for threading. return.
             if(strlen($str) < $this->maxchars) {
-                $thread[] = $str.$pageTag;
+                $thread[] = $str;
                 return $thread;
             }
 
@@ -857,14 +872,14 @@ class Toopt
             // substring for this toot is head. add to accumulator.
             $pos = strrpos(substr($str, 0, $this->maxchars), $threadEndChar)+1;
             $thread[] = [
-                substr($str, 0, $pos).$pageTag,
+                substr($str, 0, $pos)
             ];
 
             // tail call
-            return $threadify(substr($str, $pos), $pageCount, $thread, $page);
+            return $threadify(substr($str, $pos), $thread);
         };
 
-        return $threadify($t, $pageCount);
+        return $threadify($t);
     }
 
     /**
