@@ -4,10 +4,17 @@ Toopt is a command-line posting utility for mastodon written in PHP.
 Toopt is designed for ease of composability, ie. in scripts or pipelines, but also works as a utility. Toopt is not a full-featured mastodon client, and is not intended to be; it is for posting only. Toopt is written as a single file.
 
 ## Installation
-The easiest mode of installation is to download the latest stable version from github:
+The easiest installation is to download directly.
 
+Using curl:
 ```bash
-wget "https://raw.githubusercontent.com/gbhorwood/toopt/main/toopt.php?token=GHSAT0AAAAAAB7DA5D365FDCYDXWT6Y6OVGZA3OB4Q" -O "toopt.php"
+curl https://toopt.fruitbat.studio/toopt.php > ./toopt.php
+chmod 755 ./toopt.php
+```
+
+Or wget:
+```bash
+wget https://toopt.fruitbat.studio/toopt.php -O ./toopt.php
 chmod 755 ./toopt.php
 ```
 
