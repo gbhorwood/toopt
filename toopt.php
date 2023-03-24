@@ -123,7 +123,7 @@ class Toopt
     /**
      * Maximum chars of one toot. Content longer will be threaded.
      */
-    private Int $maxchars = 140;
+    private Int $maxchars = 500;
 
     /**
      * Parsed command line arguments
@@ -892,7 +892,7 @@ class Toopt
      */
     private function addPageFooters(Array $contentArray):Array
     {
-        if(count($contentArray) > 0) {
+        if(count($contentArray) > 1) {
             array_walk($contentArray, function(&$v, $k) use($contentArray) {
                 $v = $v.PHP_EOL.($k+1)."/".count($contentArray);
             });
