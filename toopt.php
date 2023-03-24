@@ -255,7 +255,7 @@ class Toopt
           $ toopt.php "some toot"
           Toot as the default account.
 
-          $ toopt.php --address=@user@instance.tld "some toot"
+          $ toopt.php --account=@user@instance.tld "some toot"
           Toot as a specific account as listed in the output from --list-accounts.
 
           $ echo "some toot" | toopt.php

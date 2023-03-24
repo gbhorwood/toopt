@@ -33,7 +33,7 @@ toopt.php --add-account
 
 Toopt will poll for login credentials.  The account will be stored and set as the default account
 
-#### List available accounts
+### List available accounts
 To list all of your stored accounts, call `toopt` with `--list-accounts`:
 
 ```bash
@@ -42,7 +42,7 @@ toopt.php --list-accounts
 
 The default account will be highlighted.
 
-#### Delete account
+### Delete account
 Accounts can be deleted from the store with `--delete-account=`:
 
 ```bash
@@ -51,7 +51,7 @@ toopt.php --delete-account=@name@instance.social
 
 The default account cannot be delted
 
-#### Change default account
+### Change default account
 The default account can be changed with `--set-default-account`:
 
 ```bash
@@ -79,7 +79,7 @@ Content warnings (or spoilers) can be added to toots using the `--cw=` argument
 toopt.php --cw="warning! test content" "Hello world"
 ```
 
-### Tooting content from files and STDIN
+### Tooting content from files or STDIN
 Toot content can be passed to `toopt` from a file or from a pipe. All of these work:
 
 ```bash
@@ -102,8 +102,33 @@ Files or string arguments can be used as toots for a thread. Toots are threaded 
 
 **Note:** Content from `STDIN` is given priority. If content is piped into to `toopt`, all other content is ignored.
 
-## To Do
-- Manage default account status
-- Delete accounts
-- Images
-- Descriptions for images
+## Examples
+Post a toot from the default account
+```bash
+toopt.php "This is a toot"
+```
+
+Post a toot as from an account other than default
+```bash
+toopt.php --account=@otheraccount@instance.social "This is a toot"
+```
+
+Post a toot with a content warning
+```bash
+toopt.php --cw="This is a content warning" "This is a toot"
+```
+
+Post a three-toot thread
+```bash
+toopt.php "This is toot 1" "This is toot2" "This is toot3"
+```
+
+Post a three-toot thread using a mix of files and string arguments
+```bash
+toopt.php "This is toot 1" /path/to/toot2.txt /path/to/toot3
+```
+
+Display help
+```bash
+toopt.php --help
+```
