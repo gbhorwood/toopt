@@ -100,6 +100,8 @@ if(basename($argv[0]) == basename(__FILE__)) {
         $toopt->handleVersion();
         $toopt->setConfigFile();
         $toopt->handleListAccounts();
+        $toopt->handleDeleteAccount();
+        $toopt->handleSetDefaultAccount();
         $toopt->handleAddAccount();
         $toopt->handleCw();
         $toopt->toot();
@@ -121,7 +123,7 @@ class Toopt
     /**
      * Maximum chars of one toot. Content longer will be threaded.
      */
-    private Int $maxchars = 140;
+    private Int $maxchars = 500;
 
     /**
      * Parsed command line arguments
@@ -240,18 +242,20 @@ class Toopt
           or:  cat /path/to/text/file | toopt.php
 
         {$boldAnsi}Arguments:{$closeAnsi}
-          --list-accounts    Show all accounts available. Default account highlighted.
-          --add-account      Log into mastodon and add account to list of available accounts.
-          --account=ADDRESS  Explicitly use an account
-          --help             Show this page
-          --version          Show version
-          --cw=WARNING       Set content warning
+          --list-accounts               Show all accounts available. Default account highlighted.
+          --account=ADDRESS             Explicitly use an account
+          --add-account                 Log into mastodon and add account to list of available accounts.
+          --delete-account=ADDRESS      Show all accounts available. Default account highlighted.
+          --set-default-account=ADDRESS Set an account already added as the default
+          --help                        Show this page
+          --version                     Show version
+          --cw=WARNING                  Set content warning
 
         {$boldAnsi}Examples:{$closeAnsi}
           $ toopt.php "some toot"
           Toot as the default account.
 
-          $ toopt.php --address=@user@instance.tld "some toot"
+          $ toopt.php --account=@user@instance.tld "some toot"
           Toot as a specific account as listed in the output from --list-accounts.
 
           $ echo "some toot" | toopt.php
@@ -359,6 +363,84 @@ class Toopt
     }
 
     /**
+     * Updates one account to being the default in the config file if
+     * the --delete-account argument has been parsed into the $args array
+     *
+     * @return void
+     */
+    public function handleSetDefaultAccount():void
+    {
+        if(isset($this->args['set-default-account'])) {
+            $account = $this->args['set-default-account'][0];
+
+            if(isset($this->configFile)) {
+
+                // read in existing config if any
+                $configArray = json_decode(file_get_contents($this->configFile) ?? [], true);
+
+                // handle invalid account
+                if(!in_array($account, array_keys($configArray['accounts']))) {
+                    $this->error("Account $account does not exist");
+                    $this->outputListAccount();
+                    throw new \Exception(1);
+                }
+
+                // update and write config data
+                $configArray['default'] = $account;
+                $fp = fopen($this->configFile, 'w');
+                fwrite($fp, json_encode($configArray, JSON_PRETTY_PRINT));
+                fclose($fp);
+                $this->ok("Updated $account to default");
+                $this->outputListAccount();
+                throw new \Exception(0); // script exit with 0
+            }
+        }
+    }
+
+    /**
+     * Deletes one account in the config file if the --delete-account argument
+     * has been parsed into the $args array
+     *
+     * @return void
+     * @throws Exception Terminates script
+     */
+    public function handleDeleteAccount():void
+    {
+        if(isset($this->args['delete-account'])) {
+            $account = $this->args['delete-account'][0];
+
+            if(isset($this->configFile)) {
+
+                // read in existing config if any
+                $configArray = json_decode(file_get_contents($this->configFile) ?? [], true);
+
+                // error on trying to delete default account
+                if($configArray['default'] == $account) {
+                    $this->error("Cannot delete default account. Change default first");
+                    $this->outputListAccount();
+                    throw new \Exception(1);
+                }
+
+                // if account exists, delete it and rewrite config file
+                if(in_array($account, array_keys($configArray['accounts']))) {
+                    unset($configArray['accounts'][$account]);
+                    $fp = fopen($this->configFile, 'w');
+                    fwrite($fp, json_encode($configArray, JSON_PRETTY_PRINT));
+                    fclose($fp);
+                    $this->ok("Deleted $account");
+                }
+                else {
+                    $this->info("Account $account does not exist");
+                }
+
+                // output new account list
+                $this->outputListAccount();
+            }
+            throw new \Exception(0); // script exit with 0
+        }
+    }
+
+    /**
      * Polls user for account credentials, creates app and does login, verifies
      * the account and writes results as an account in the config file. Sets new
      * account as 'default'. Outputs account list.
@@ -435,6 +517,11 @@ class Toopt
         $contentArray = count($contentArray) > 1 ? $contentArray : $this->threadify($contentArray[0]);
 
         /**
+         * Add page footers to each toot
+         */
+        $contentArray = $this->addPageFooters($contentArray);
+        
+        /**
          * Post toot
          */
         $toot = array_shift($contentArray);
@@ -445,8 +532,7 @@ class Toopt
          */
         if(count($contentArray)) {
             array_map(fn($t) => 
-                $this->doToot($credentials['instance'], $t, $this->cw, $response->id, $credentials['access_token']),
-                $contentArray);
+                $this->doToot($credentials['instance'], $t, $this->cw, $response->id, $credentials['access_token']), $contentArray);
         }
     }
 
@@ -722,7 +808,7 @@ class Toopt
             throw new \Exception(1);
         }
 
-        return array_filter($content);
+        return array_values(array_filter($content));
     }
 
     /**
@@ -798,6 +884,23 @@ class Toopt
     }
 
     /**
+     * Add the page footers to each toot in the contentArray if
+     * required.
+     *
+     * @param  Array $contentArray
+     * @return Array
+     */
+    private function addPageFooters(Array $contentArray):Array
+    {
+        if(count($contentArray) > 1) {
+            array_walk($contentArray, function(&$v, $k) use($contentArray) {
+                $v = $v.PHP_EOL.($k+1)."/".count($contentArray);
+            });
+        }
+        return $contentArray;
+    }
+
+    /**
      * Takes the toot content string as $t and returns array of toots to be threaded.
      * 
      * @param  String $t The content to post
@@ -805,21 +908,15 @@ class Toopt
      */
     private function threadify(String $t):Array
     {
-        // calculate number of posts in thread
-        $pageCount = ceil(strlen($t)/ $this->maxchars);
-
         /**
          * Tail recurse to build array of toots
          */
-        $threadify = function($str, $pageCount, $thread = [], $page = 1) use ( &$threadify ):Array {
+        $threadify = function($str, $thread = []) use ( &$threadify ):Array {
             $str = trim($str);
             
-            // build page tag to put at bottom of post, ie. 1/2
-            $pageTag = $pageCount > 1 ? PHP_EOL.$page++.'/'.$pageCount : null;
-
             // post too short for threading. return.
             if(strlen($str) < $this->maxchars) {
-                $thread[] = $str.$pageTag;
+                $thread[] = $str;
                 return $thread;
             }
 
@@ -857,14 +954,14 @@ class Toopt
             // substring for this toot is head. add to accumulator.
             $pos = strrpos(substr($str, 0, $this->maxchars), $threadEndChar)+1;
             $thread[] = [
-                substr($str, 0, $pos).$pageTag,
+                substr($str, 0, $pos)
             ];
 
             // tail call
-            return $threadify(substr($str, $pos), $pageCount, $thread, $page);
+            return $threadify(substr($str, $pos), $thread);
         };
 
-        return $threadify($t, $pageCount);
+        return $threadify($t);
     }
 
     /**
@@ -967,6 +1064,23 @@ class Toopt
         }
         else {
             fwrite(STDOUT, OK.wordwrap($message, $this->getColWidth()).PHP_EOL);
+        }
+    }
+
+    /**
+     * Output $message as INFO to STDOUT
+     *
+     * @param  String $message
+     * @return void
+     * @note   Uses print() if TESTENVIRONMENT is set as phpunit relies on output buffering
+     */
+    private function info(String $message):void
+    {
+        if(getenv('TESTENVIRONMENT')) {
+            print(INFO.wordwrap($message, $this->getColWidth()).PHP_EOL);
+        }
+        else {
+            fwrite(STDOUT, INFO.wordwrap($message, $this->getColWidth()).PHP_EOL);
         }
     }
 
