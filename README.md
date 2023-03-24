@@ -33,6 +33,7 @@ toopt.php --add-account
 
 Toopt will poll for login credentials.  The account will be stored and set as the default account
 
+#### List available accounts
 To list all of your stored accounts, call `toopt` with `--list-accounts`:
 
 ```bash
@@ -40,6 +41,22 @@ toopt.php --list-accounts
 ```
 
 The default account will be highlighted.
+
+#### Delete account
+Accounts can be deleted from the store with `--delete-account=`:
+
+```bash
+toopt.php --delete-account=@name@instance.social
+```
+
+The default account cannot be delted
+
+#### Change default account
+The default account can be changed with `--set-default-account`:
+
+```bash
+toopt.php --set-default-account=@name@instance.social
+```
 
 ## Posting toots
 The simplest usage case is to post a single toot using your default account:

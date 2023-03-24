@@ -100,6 +100,8 @@ if(basename($argv[0]) == basename(__FILE__)) {
         $toopt->handleVersion();
         $toopt->setConfigFile();
         $toopt->handleListAccounts();
+        $toopt->handleDeleteAccount();
+        $toopt->handleSetDefaultAccount();
         $toopt->handleAddAccount();
         $toopt->handleCw();
         $toopt->toot();
@@ -240,12 +242,14 @@ class Toopt
           or:  cat /path/to/text/file | toopt.php
 
         {$boldAnsi}Arguments:{$closeAnsi}
-          --list-accounts    Show all accounts available. Default account highlighted.
-          --add-account      Log into mastodon and add account to list of available accounts.
-          --account=ADDRESS  Explicitly use an account
-          --help             Show this page
-          --version          Show version
-          --cw=WARNING       Set content warning
+          --list-accounts               Show all accounts available. Default account highlighted.
+          --account=ADDRESS             Explicitly use an account
+          --add-account                 Log into mastodon and add account to list of available accounts.
+          --delete-account=ADDRESS      Show all accounts available. Default account highlighted.
+          --set-default-account=ADDRESS Set an account already added as the default
+          --help                        Show this page
+          --version                     Show version
+          --cw=WARNING                  Set content warning
 
         {$boldAnsi}Examples:{$closeAnsi}
           $ toopt.php "some toot"
@@ -352,6 +356,84 @@ class Toopt
     {
         if(isset($this->args['list-accounts'])) {
             if(isset($this->configFile)) {
+                $this->outputListAccount();
+            }
+            throw new \Exception(0); // script exit with 0
+        }
+    }
+
+    /**
+     * Updates one account to being the default in the config file if
+     * the --delete-account argument has been parsed into the $args array
+     *
+     * @return void
+     */
+    public function handleSetDefaultAccount():void
+    {
+        if(isset($this->args['set-default-account'])) {
+            $account = $this->args['set-default-account'][0];
+
+            if(isset($this->configFile)) {
+
+                // read in existing config if any
+                $configArray = json_decode(file_get_contents($this->configFile) ?? [], true);
+
+                // handle invalid account
+                if(!in_array($account, array_keys($configArray['accounts']))) {
+                    $this->error("Account $account does not exist");
+                    $this->outputListAccount();
+                    throw new \Exception(1);
+                }
+
+                // update and write config data
+                $configArray['default'] = $account;
+                $fp = fopen($this->configFile, 'w');
+                fwrite($fp, json_encode($configArray, JSON_PRETTY_PRINT));
+                fclose($fp);
+                $this->ok("Updated $account to default");
+                $this->outputListAccount();
+                throw new \Exception(0); // script exit with 0
+            }
+        }
+    }
+
+    /**
+     * Deletes one account in the config file if the --delete-account argument
+     * has been parsed into the $args array
+     *
+     * @return void
+     * @throws Exception Terminates script
+     */
+    public function handleDeleteAccount():void
+    {
+        if(isset($this->args['delete-account'])) {
+            $account = $this->args['delete-account'][0];
+
+            if(isset($this->configFile)) {
+
+                // read in existing config if any
+                $configArray = json_decode(file_get_contents($this->configFile) ?? [], true);
+
+                // error on trying to delete default account
+                if($configArray['default'] == $account) {
+                    $this->error("Cannot delete default account. Change default first");
+                    $this->outputListAccount();
+                    throw new \Exception(1);
+                }
+
+                // if account exists, delete it and rewrite config file
+                if(in_array($account, array_keys($configArray['accounts']))) {
+                    unset($configArray['accounts'][$account]);
+                    $fp = fopen($this->configFile, 'w');
+                    fwrite($fp, json_encode($configArray, JSON_PRETTY_PRINT));
+                    fclose($fp);
+                    $this->ok("Deleted $account");
+                }
+                else {
+                    $this->info("Account $account does not exist");
+                }
+
+                // output new account list
                 $this->outputListAccount();
             }
             throw new \Exception(0); // script exit with 0
@@ -982,6 +1064,23 @@ class Toopt
         }
         else {
             fwrite(STDOUT, OK.wordwrap($message, $this->getColWidth()).PHP_EOL);
+        }
+    }
+
+    /**
+     * Output $message as INFO to STDOUT
+     *
+     * @param  String $message
+     * @return void
+     * @note   Uses print() if TESTENVIRONMENT is set as phpunit relies on output buffering
+     */
+    private function info(String $message):void
+    {
+        if(getenv('TESTENVIRONMENT')) {
+            print(INFO.wordwrap($message, $this->getColWidth()).PHP_EOL);
+        }
+        else {
+            fwrite(STDOUT, INFO.wordwrap($message, $this->getColWidth()).PHP_EOL);
         }
     }
 
