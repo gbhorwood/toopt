@@ -80,7 +80,7 @@ toopt.php --acount=@otheraccount@mastodon.social "Hello world from other account
 ```
 
 ### Adding content warnings
-Content warnings (or spoilers) can be added to toots using the `--cw=` argument
+Content warnings (or spoilers) can be added to toots using the `--cw=` argument:
 
 ```bash
 toopt.php --cw="warning! test content" "Hello world"
@@ -94,6 +94,15 @@ echo "Hello world from STDIN" | toopt.php
 toopt.php /path/to/hello_world.txt
 cat /path/to/hello_world.txt | toopt.php
 ```
+
+### Interactive composing
+Content can be composed interactively using the `-i` or `--interactive` arguments:
+
+```bash
+toopt.php --interactive
+```
+
+The editor is a line editor. A confirmation prompt is shown before posting.
 
 ### Automatic threading
 Content that is longer than 500 characters will be automatically threaded. Threads will be broken on newlines or punctuation, if possible. Thread footers, ie. "1/3", will be appended to the bottom of each toot.
@@ -133,6 +142,15 @@ toopt.php "This is toot 1" "This is toot2" "This is toot3"
 Post a three-toot thread using a mix of files and string arguments
 ```bash
 toopt.php "This is toot 1" /path/to/toot2.txt /path/to/toot3
+```
+
+Compose and post a toot interactively
+```bash
+toopt.php --interactive
+```
+or
+```bash
+toopt.php -i
 ```
 
 Display help
