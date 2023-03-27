@@ -240,6 +240,7 @@ class Toopt
           or:  toopt.php /path/to/text/file
           or:  echo "STRING" | toopt.php
           or:  cat /path/to/text/file | toopt.php
+          or:  toopt.php --interactive
 
         {$boldAnsi}Arguments:{$closeAnsi}
           --list-accounts               Show all accounts available. Default account highlighted.
@@ -247,6 +248,7 @@ class Toopt
           --add-account                 Log into mastodon and add account to list of available accounts.
           --delete-account=ADDRESS      Show all accounts available. Default account highlighted.
           --set-default-account=ADDRESS Set an account already added as the default
+          -i, --interactive             Compose toot content interactively
           --help                        Show this page
           --version                     Show version
           --cw=WARNING                  Set content warning
@@ -800,8 +802,9 @@ class Toopt
      */
     protected function getContent():Array
     {
-        $content = $this->readPipeContent();
-        $content = $content ? [trim($content)] : $this->readArgContent();
+        $content = $this->readInteractiveContent();
+        $content = !is_null($content) ? $content : $this->readPipeContent();
+        $content = !is_null($content) ? $content : $this->readArgContent();
 
         if(!$content) {
             $this->error("No content");
@@ -814,9 +817,9 @@ class Toopt
     /**
      * Read toot content from STDIN if exists. Returns null if no STDIN content.
      *
-     * @return ?String
+     * @return ?Array
      */
-    protected function readPipeContent():?String
+    protected function readPipeContent():?Array
     {
         $streams = [STDIN];
         $write_array = [];
@@ -829,9 +832,62 @@ class Toopt
             while ($line = fgets(STDIN)) {
                 $pipedContent .= $line;
             }
-            return (string)$pipedContent;
+            return [(string)$pipedContent];
         }
 
+        return null;
+    }
+
+    /**
+     * Read toot content interactively if the --interactive or -i argument(s)
+     * have been parsed into the $args array
+     *
+     * @return ?Array
+     */
+    protected function readInteractiveContent():?Array
+    {
+        /**
+         * Function to read multiline input
+         */
+        $readInput = function() {
+            while (true) {
+                // read the line
+                $line = readline();
+
+                // test for ^D and break loop if we get it
+                if ($line === false) {
+                    break;
+                }
+
+                // add line to history file for navigation
+                readline_add_history($line);
+            }
+
+            // return lines as string. clear the history.
+            $readlineListHistory =  join(PHP_EOL, readline_list_history());
+            readline_clear_history();
+            return $readlineListHistory;
+        };
+
+        /**
+         * Poll for interactive input until user approves
+         */
+        if(isset($this->args['interactive']) || isset($this->args['i'])) {
+            while(true){
+                // get multiline input
+                $this->writeOut(BOLD_ANSI."Enter content. When done, hit ^D on a new line to continue.".CLOSE_ANSI.PHP_EOL);
+                $input = $readInput();
+
+                // poll user for confirmation
+                $this->writeOut(PHP_EOL.BOLD_ANSI."The content is:".CLOSE_ANSI.PHP_EOL.$input.PHP_EOL);
+                if($this->promptMenu('Is this good?') == 'y') {
+                    $this->writeOut(PHP_EOL);
+                    break;
+                }
+                $this->writeOut(PHP_EOL);
+            }
+            return [$input];
+        }
         return null;
     }
 
@@ -966,7 +1022,7 @@ class Toopt
 
     /**
      * Returns the number of cols to wrap output on.
-     * This is one half of the total columns or 80, whichever is higher.
+     * This is 75% of the total columns or 80, whichever is higher.
      *
      * @return Int
      * @note On systems without stty or awk, this returns 80.
@@ -978,7 +1034,7 @@ class Toopt
         if(filter_var($columns, FILTER_VALIDATE_INT) === false) {
             return 80;
         }
-        return $columns/2 > 80 ? (int)floor($columns/2) : 80;
+        return $columns*.75 > 80 ? (int)floor($columns*.75) : 80;
     }
 
     /**
@@ -1031,6 +1087,49 @@ class Toopt
         }
 
         return $accountConfig;
+    }
+
+    /**
+     * Prompt user to choose from a menu made from the $options array
+     * with default
+     *
+     * @param  String  $prompt
+     * @param  Array   $options
+     * @param  String  $default
+     * @return String  The keystroke from the user, one char
+     */
+    private function promptMenu($prompt = "Choose One", $options = ['y', 'n'], $default = 'y'):String
+    {
+        // Create array of valid options and array of options formatted for display
+        $options = array_merge([$default], array_diff($options, [$default]));
+        $displayOptions = join(',', array_merge([$default], array_diff($options, [$default])));
+
+        /**
+         * Prompt user to choose an option until they select either a valid value
+         * or accept the default by hitting <RETURN>
+         */
+        while (true) {
+
+            // Read one keystroke from the user
+            $this->writeOut(PHP_EOL.BOLD_ANSI.$prompt.'['.$displayOptions.']'.CLOSE_ANSI);
+            readline_callback_handler_install(null, function() {});
+            $keystroke = stream_get_contents(STDIN, 1);
+
+            // Return selected value if valid
+            if (in_array($keystroke, $options)) {
+                readline_callback_handler_remove();
+                return $keystroke;
+            }
+
+            // Return default if keystroke <RETURN>
+            if (ord($keystroke) == 10) {
+                readline_callback_handler_remove();
+                return $default;
+            }
+
+            // No valid choice. Show menu again
+            print PHP_EOL;
+        }
     }
 
     /**
