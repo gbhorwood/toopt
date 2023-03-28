@@ -5,7 +5,7 @@ namespace gbhorwood\toopt;
 /**
  * Version
  */
-define('VERSION', 'beta');
+define('VERSION', 'beta-1.0');
 
 /**
  * Minimum php version required
