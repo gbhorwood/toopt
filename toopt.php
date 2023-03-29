@@ -126,6 +126,16 @@ class Toopt
     private Int $maxchars = 500;
 
     /**
+     * File extensions identifying files to be treated as media
+     */
+    private Array $mediaExtensions = [
+        'jpg' => "image/jpg",
+        'jpeg' => "image/jpg",
+        'gif' => "image/gif",
+        'png' => "image/png",
+    ];
+
+    /**
      * Parsed command line arguments
      */
     private Array $args = [];
@@ -524,17 +534,33 @@ class Toopt
         $contentArray = $this->addPageFooters($contentArray);
         
         /**
+         * Upload all media, if any, and get ids
+         */
+        $mediaIds = $this->doMedia($credentials['instance'], $credentials['access_token']);
+
+        /**
          * Post toot
          */
         $toot = array_shift($contentArray);
-        $response = $this->doToot($credentials['instance'], $toot, $this->cw, null, $credentials['access_token']);
+        $response = $this->doToot($credentials['instance'],
+            $toot,
+            $mediaIds,
+            $this->cw,
+            null,
+            $credentials['access_token']);
 
         /**
          * Post rest of toots in thread if necessary
          */
         if(count($contentArray)) {
             array_map(fn($t) => 
-                $this->doToot($credentials['instance'], $t, $this->cw, $response->id, $credentials['access_token']), $contentArray);
+                $this->doToot($credentials['instance'],
+                $t,
+                null,
+                $this->cw,
+                $response->id,
+                $credentials['access_token']),
+            $contentArray);
         }
     }
 
@@ -686,13 +712,14 @@ class Toopt
      *
      * @param  String  $instance The instance fqdn the toot is posted to, ie mastodon.social
      * @param  String  $content The text content of the toot
+     * @param  ?Array  $mediaIds Optional array of ids of uploaded media
      * @param  ?String $cw The content warning/spoiler, if any
      * @param  ?Int    $inReplyToId The id of the toot this toot is in reply to, if any
      * @param  ?String $accessToken The access token of the user
      * @return stdClass
      * @throws Exception Terminates script
      */
-    private function doToot(String $instance, String $content, ?String $cw, ?Int $inReplyToId, String $accessToken):\stdClass
+    private function doToot(String $instance, String $content, ?Array $mediaIds, ?String $cw, ?Int $inReplyToId, String $accessToken):\stdClass
     {
         $endpoint = "https://$instance/api/v1/statuses";
 
@@ -703,6 +730,11 @@ class Toopt
         // handle content warning, if any
         if($cw !== null) {
             $payload['spoiler_text'] = trim($cw).PHP_EOL;
+        }
+
+        // handle media attachments, if any
+        if($mediaIds !== null) {
+            $payload['media_ids'] = array_values($mediaIds);
         }
         
         // set follow-up toots in thread to visibility 'unlisted'
@@ -812,6 +844,82 @@ class Toopt
         }
 
         return array_values(array_filter($content));
+    }
+
+    /**
+     * Parses all media arguments and uploads to instance, returning
+     * an array of media ids.
+     *
+     * @param  String $instance The instance, ie mastodon.social
+     * @param  String $accessToken The access token of the account
+     * @return ?Array The array of media ids
+     */
+    protected function doMedia(String $instance, String $accessToken):?Array
+    {
+        $endpoint = "https://$instance/api/v1/media";
+
+        // get media paths and descriptions from args, if any.
+        $mediaArgsArray = $this->handleMediaArgs();
+
+        return match ($mediaArgsArray) {
+            // no media
+            null => null,
+
+            // upload all media, return ids
+            default => array_map(function($m) use($endpoint, $accessToken) {
+                            $mediaResult = $this->api->postMedia($endpoint, $m, $accessToken);
+                            $this->ok("Media ".$mediaResult->id." uploaded");
+                            return $mediaResult->id;
+                        }, $mediaArgsArray)
+        };
+    }
+
+    /**
+     * Parse positional arguments for media and return array of the
+     * file path to the media file and its description, if any, for 
+     * each media file.
+     *
+     * Only the first four media files will be processed.
+     *
+     * @return ?Array
+     */
+    protected function handleMediaArgs():?Array
+    {
+        // function to handle one positional media file arg and it's optional --description arg
+        $parseOneMediaArg = function($p) {
+            if(is_file($p)) {
+                $extension = @pathinfo($p)['extension'];
+                if(!is_readable($p)) {
+                    $this->warning("Can't read media file at $p. Check permissions.");
+                    return null;
+                }
+                return in_array(strtolower($extension), array_keys($this->mediaExtensions)) ?
+                    [
+                        "path" => realpath($p),
+                        "name" => basename($p),
+                        "mime" => $this->mediaExtensions[$extension],
+                        "description" => array_key_exists('description', $this->args) ? array_shift($this->args['description']) : null,
+                    ] :
+                    null;
+            }
+        };
+
+        // apply $parseOneMediaArg to all media file args (up to four), if any
+        if(count($this->args['positional'])) {
+            $argMediaArray = array_filter(
+                array_map(fn($p) => $parseOneMediaArg($p), $this->args['positional'])
+            );
+
+            // enforce max four media files
+            if(count($argMediaArray) > 4) {
+                $this->warning("Only the first four media files will be uploaded");
+                $argMediaArray = array_slice(array_values($argMediaArray), 0, 4);
+            }
+
+            return count($argMediaArray) ? array_values($argMediaArray) : null;
+        }
+
+        return null;
     }
 
     /**
@@ -1184,6 +1292,23 @@ class Toopt
     }
 
     /**
+     * Output $message as WARNING to STDOUT
+     *
+     * @param  String $message
+     * @return void
+     * @note   Uses print() if TESTENVIRONMENT is set as phpunit relies on output buffering
+     */
+    private function warning(String $message):void
+    {
+        if(getenv('TESTENVIRONMENT')) {
+            print(WARNING.wordwrap($message, $this->getColWidth()).PHP_EOL);
+        }
+        else {
+            fwrite(STDOUT, WARNING.wordwrap($message, $this->getColWidth()).PHP_EOL);
+        }
+    }
+
+    /**
      * Outputs text with wordwrapping
      *
      * @param  String $message
@@ -1249,7 +1374,50 @@ Class Api {
         $header = curl_getinfo($ch,  CURLINFO_RESPONSE_CODE);
 
         if($header !== 201 && $header !== 200) {
-            print curl_error($ch);
+            curl_close($ch);
+            throw new Exception("Call to $url returned $header");
+        }
+
+        curl_close($ch);
+
+        return json_decode($result);
+    }
+
+    /**
+     * POST meadia to instance via curl
+     *
+     * @param  String $url The full url to POST to
+     * @param  Array  $payload The payload to send as an array
+     * @param  String $accessToken The access token of the account
+     * @return Object The api response object
+     * @throws Exception
+     */
+    public function postMedia(String $url, Array $payload, String $accessToken):Object
+    {
+        $curlFile = curl_file_create($payload['path'], $payload['mime'], $payload['name']);
+        $body = [
+            'file' => $curlFile,
+            'description' => $payload['description']
+        ];
+
+        $headers = [
+            'Content-Type: multipart/form-data',
+            'Accept: application/json',
+            'Authorization: Bearer '.$accessToken,
+        ];
+
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_FAILONERROR, true);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+
+        $result = curl_exec($ch);
+        $header = curl_getinfo($ch,  CURLINFO_RESPONSE_CODE);
+
+        if($header !== 201 && $header !== 200) {
             curl_close($ch);
             throw new Exception("Call to $url returned $header");
         }
