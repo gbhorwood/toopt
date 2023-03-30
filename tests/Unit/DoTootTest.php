@@ -11,11 +11,11 @@ class DoTootTest extends TestCase
     use \phpmock\phpunit\PHPMock;
 
     /**
-     * 
+     * Test doToot() 
      *
      * @dataProvider doTootProvider
      */
-    public function testDoTootSuccess($instance, $content, $cw, $replyToId, $accessToken)
+    public function testDoTootSuccess($instance, $content, $mediaIds, $cw, $replyToId, $accessToken)
     {
         $argv = ['scriptname'];
         include_once('toopt.php');
@@ -36,8 +36,8 @@ class DoTootTest extends TestCase
         $this->setOutputCallback(function($output) {
             $this->assertRegexp('/Toot 7/', $output);
         });
-
-        $doTootReturn = $doToot->invokeArgs($toopt, [$instance, $content, $cw, $replyToId, $accessToken]);
+           
+        $doTootReturn = $doToot->invokeArgs($toopt, [$instance, $content, $mediaIds, $cw, (int)$replyToId, $accessToken]);
 
         $this->assertEquals($postReturn, $doTootReturn);
     }
@@ -50,10 +50,10 @@ class DoTootTest extends TestCase
     public function doTootProvider():Array
     {
         return [
-            ['example.ca', 'test content', null, null, 'accesstoken'],
-            ['example.ca', 'test content', 'content warning', null, 'accesstoken'],
-            ['example.ca', 'test content', null, 3, 'accesstoken'],
-            ['example.ca', 'test content', 'content warning', 3, 'accesstoken'],
+            ['example.ca', 'test content', null, null, null, 'accesstoken'],
+            ['example.ca', 'test content', null, 'content warning', null, 'accesstoken'],
+            ['example.ca', 'test content', null, null, 3, 'accesstoken'],
+            ['example.ca', 'test content', null, 'content warning', 3, 'accesstoken'],
         ];
     }
 }
