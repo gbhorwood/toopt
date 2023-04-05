@@ -251,6 +251,8 @@ class Toopt
           or:  echo "STRING" | toopt.php
           or:  cat /path/to/text/file | toopt.php
           or:  toopt.php --interactive
+          or:  toopt.php /path/to/image.jpg --description="STRING"
+          or:  toopt.php "STRING" /path/to/image.jpg --description="STRING"
 
         {$boldAnsi}Arguments:{$closeAnsi}
           --list-accounts               Show all accounts available. Default account highlighted.
@@ -284,6 +286,12 @@ class Toopt
 
           $ toopt.php "some toot" /path/to/secondtoot "final toot"
           Toot strings and files as a thread
+
+          $ toopt.php --description="some image" /path/to/image.jpg
+          Toot a media file with a description
+
+          $ toopt.php "some toot" --description="some image" /path/to/image.jpg
+          Toot string with attached media file
         TXT;
 
         if(isset($this->args['help'])) {
@@ -669,7 +677,7 @@ class Toopt
      * @return Object The instance details
      * @throws Exception Terminates script
      */
-    private function createApp(String $instance):Object
+    protected function createApp(String $instance):Object
     {
         $endpoint = "https://$instance/api/v1/apps";
         $data = [
@@ -698,7 +706,7 @@ class Toopt
      * @return Object
      * @throws Exception Terminates script
      */
-    private function doVerifyCredentials(String $instance, String $accessToken):object
+    protected function doVerifyCredentials(String $instance, String $accessToken):object
     {
         $endpoint = "https://$instance/api/v1/accounts/verify_credentials";
         try {
@@ -773,7 +781,7 @@ class Toopt
      * @return Object
      * @throws Exception Terminates script
      */
-    private function doOauth(String $instance, String $username, String $password, String $clientId, String $clientSecret):object
+    protected function doOauth(String $instance, String $username, String $password, String $clientId, String $clientSecret):object
     {
         $endpoint = "https://$instance/oauth/token";
         $data = [
@@ -1387,7 +1395,7 @@ Class Api {
 
         if($header !== 201 && $header !== 200) {
             curl_close($ch);
-            throw new Exception("Call to $url returned $header");
+            throw new \Exception("Call to $url returned $header");
         }
 
         curl_close($ch);
@@ -1431,7 +1439,7 @@ Class Api {
 
         if($header !== 201 && $header !== 200) {
             curl_close($ch);
-            throw new Exception("Call to $url returned $header");
+            throw new \Exception("Call to $url returned $header");
         }
 
         curl_close($ch);
