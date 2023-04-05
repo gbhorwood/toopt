@@ -63,7 +63,7 @@ define('REVERSE', '7');
 /**
  * Convenience ANSI codes
  */
-define('CLOSE_ANSI', ESC."[0m"); // termination code to revert to default styling
+define('CLOSE_ANSI', ESC."[0m");
 define('BOLD_ANSI', ESC."[1m");
 define('GREEN_ANSI', ESC."[32m");
 define('RED_ANSI', ESC."[31m");
@@ -387,6 +387,7 @@ class Toopt
      * the --set-default-account argument has been parsed into the $args array
      *
      * @return void
+     * @throws Exception Terminates script
      */
     public function handleSetDefaultAccount():void
     {
