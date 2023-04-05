@@ -355,7 +355,7 @@ class Toopt
     }
 
     /**
-     * Outputs the list of accounts in the config file if the --accounts argument has been
+     * Outputs the list of accounts in the config file if the --list-accounts argument has been
      * parsed into the $args array.
      * Indicates last-used account.
      * Handles errors for missing or empty config.
@@ -376,7 +376,7 @@ class Toopt
 
     /**
      * Updates one account to being the default in the config file if
-     * the --delete-account argument has been parsed into the $args array
+     * the --set-default-account argument has been parsed into the $args array
      *
      * @return void
      */
@@ -441,8 +441,11 @@ class Toopt
                     fclose($fp);
                     $this->ok("Deleted $account");
                 }
+                // error on account does not exist
                 else {
                     $this->info("Account $account does not exist");
+                    $this->outputListAccount();
+                    throw new \Exception(1);
                 }
 
                 // output new account list
@@ -802,7 +805,7 @@ class Toopt
      * @param  String $accessToken
      * @return void
      */
-    private function writeConfig(String $userAddress, String $instance, String $clientId, String $clientSecret, String $accessToken):void
+    protected function writeConfig(String $userAddress, String $instance, String $clientId, String $clientSecret, String $accessToken):void
     {
         // read in existing config if any
         $configArray = json_decode(file_get_contents($this->configFile) ?? [], true);
@@ -1070,7 +1073,7 @@ class Toopt
      * @param  String $t The content to post
      * @return Array
      */
-    private function threadify(String $t):Array
+    protected function threadify(String $t):Array
     {
         /**
          * Tail recurse to build array of toots
@@ -1133,12 +1136,21 @@ class Toopt
      * This is 75% of the total columns or 80, whichever is higher.
      *
      * @return Int
-     * @note On systems without stty or awk, this returns 80.
+     * @note On systems without stty, this returns 80.
      */
-    private function getColWidth():int {
-        $ph = popen("/usr/bin/env stty -a 2> /dev/null | awk -F'[ ;]' '/columns/ { print $9 }'", 'r');
-        $columns = fread($ph, 2096);
+    function getColWidth():int
+    {
+        $ph = popen("/usr/bin/env stty size 2> /dev/null", 'r');
+        $size = fread($ph, 2096);
         pclose($ph);
+        $sizeArray = explode(' ', $size);
+
+        if(count($sizeArray) != 2) {
+            return 80;
+        }
+
+        $columns = $sizeArray[1];
+
         if(filter_var($columns, FILTER_VALIDATE_INT) === false) {
             return 80;
         }
@@ -1180,7 +1192,7 @@ class Toopt
             throw new \Exception(1);
         }
 
-        // handle --account= arg
+        // handle --account=
         if(isset($this->args['account'])) {
             if(!array_key_exists($this->args['account'][0], $configArray['accounts'])) {
                 $this->error("The account '".$this->args['account'][0]."' does not exist. Try a different account, or adding an account with --add-account");
