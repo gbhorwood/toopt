@@ -39,7 +39,7 @@ class GetContentTest extends TestCase
                         ->setMethods(['readPipeContent'])
                         ->getMock();
         $tooptStub->method('readPipeContent')
-                ->will($this->onConsecutiveCalls($validPipeContent));
+                ->will($this->onConsecutiveCalls([$validPipeContent]));
 
         /**
          * Set getContent to accessible
@@ -67,13 +67,17 @@ class GetContentTest extends TestCase
         $api = new \gbhorwood\toopt\Api();
 
         /**
-         * Mock readPipeContent
+         * Mock read methods
          */
-        $readPipeContent = $this->setAccessible('readArgContent');
+        $readPipeContent = $this->setAccessible('readPipeContent');
         $tooptStub = $this->getMockBuilder(\gbhorwood\toopt\Toopt::class)
                         ->setConstructorArgs([$api])
-                        ->setMethods(['readArgContent'])
+                        ->setMethods(['readPipeContent', 'readArgContent', 'readInteractiveContent'])
                         ->getMock();
+        $tooptStub->method('readPipeContent')
+                ->will($this->onConsecutiveCalls(null));
+        $tooptStub->method('readInteractiveContent')
+                ->will($this->onConsecutiveCalls(null));
         $tooptStub->method('readArgContent')
                 ->will($this->onConsecutiveCalls([$validArgContent]));
 
@@ -84,9 +88,49 @@ class GetContentTest extends TestCase
         $getContent = $tooptReflection->getMethod('getContent');
         $getContent->setAccessible(true);
 
-        $pipeContent = $getContent->invoke($tooptStub);
+        $argContent = $getContent->invoke($tooptStub);
 
-        $this->assertEquals($pipeContent[0], $validArgContent);
+        $this->assertEquals($argContent[0], $validArgContent);
+    }
+
+    /**
+     * Test getContent returns content from interactive input
+     *
+     */
+    public function testGetContentInteractiveContent()
+    {
+        $argv = ['scriptname'];
+        include_once('toopt.php');
+
+        $validInteractiveContent = "i am interactive content";
+
+        $api = new \gbhorwood\toopt\Api();
+
+        /**
+         * Mock read methods
+         */
+        $readPipeContent = $this->setAccessible('readPipeContent');
+        $tooptStub = $this->getMockBuilder(\gbhorwood\toopt\Toopt::class)
+                        ->setConstructorArgs([$api])
+                        ->setMethods(['readPipeContent', 'readArgContent', 'readInteractiveContent'])
+                        ->getMock();
+        $tooptStub->method('readPipeContent')
+                ->will($this->onConsecutiveCalls(null));
+        $tooptStub->method('readInteractiveContent')
+                ->will($this->onConsecutiveCalls([$validInteractiveContent]));
+        $tooptStub->method('readArgContent')
+                ->will($this->onConsecutiveCalls(null));
+
+        /**
+         * Set getContent to accessible
+         */
+        $tooptReflection = new \ReflectionObject($tooptStub);
+        $getContent = $tooptReflection->getMethod('getContent');
+        $getContent->setAccessible(true);
+
+        $interactiveContent = $getContent->invoke($tooptStub);
+
+        $this->assertEquals($interactiveContent[0], $validInteractiveContent);
     }
 
     /**
@@ -98,24 +142,41 @@ class GetContentTest extends TestCase
         $argv = ['scriptname'];
         include_once('toopt.php');
 
+        $api = new \gbhorwood\toopt\Api();
+
+        /**
+         * Mock read methods
+         */
+        $readPipeContent = $this->setAccessible('readPipeContent');
+        $tooptStub = $this->getMockBuilder(\gbhorwood\toopt\Toopt::class)
+                        ->setConstructorArgs([$api])
+                        ->setMethods(['readPipeContent', 'readArgContent', 'readInteractiveContent'])
+                        ->getMock();
+        $tooptStub->method('readPipeContent')
+                ->will($this->onConsecutiveCalls(null));
+        $tooptStub->method('readInteractiveContent')
+                ->will($this->onConsecutiveCalls(null));
+        $tooptStub->method('readArgContent')
+                ->will($this->onConsecutiveCalls(null));
+
         /**
          * Set getContent to accessible
          */
-        $api = new \gbhorwood\toopt\Api();
-        $toopt = new \gbhorwood\toopt\Toopt($api);
-        $toopt->parseargs($argv);
-        $getContentMethod = $this->setAccessible('getContent');
+        $tooptReflection = new \ReflectionObject($tooptStub);
+        $getContent = $tooptReflection->getMethod('getContent');
+        $getContent->setAccessible(true);
 
         try {
             $this->setOutputCallback(function($output) {
                 $this->assertRegexp('/No content/', $output);
             });
 
-            $content = $getContentMethod->invoke($toopt);
+            $noContent = $getContent->invoke($tooptStub);
             $this->assertEquals($content, null);
         }
         catch(\Exception $e) {
             $this->assertEquals((int)$e->getMessage(), 1);
         }
+
     }
 }

@@ -95,6 +95,8 @@ toopt.php /path/to/hello_world.txt
 cat /path/to/hello_world.txt | toopt.php
 ```
 
+**Note:** Content from `STDIN` is given priority. If content is piped into to `toopt`, all other content is ignored.
+
 ### Interactive composing
 Content can be composed interactively using the `-i` or `--interactive` arguments:
 
@@ -111,12 +113,64 @@ Content that is longer than 500 characters will be automatically threaded. Threa
 A toot thread can be built by simply passing multiple toot arguments. ie.
 
 ```bash
-toopt /path/to/toot1.txt /path/to/toot2.txt "this is toot3"
+toopt.php /path/to/toot1.txt /path/to/toot2.txt "this is toot3"
 ```
 
 Files or string arguments can be used as toots for a thread. Toots are threaded with the left-most toot being the first, descending rightward.
 
-**Note:** Content from `STDIN` is given priority. If content is piped into to `toopt`, all other content is ignored.
+## Posting media
+Media files, such as images, can be posted by providing the path to the file as an argument:
+
+```bash
+toopt.php /path/to/image.jpeg
+```
+
+Media files are identified by their file extension. The accepted extensions are:
+
+- jpg
+- jpeg
+- gif
+- png
+
+Multiple media files, up to a maximum of four, can be posted:
+
+```bash
+toopt.ph /path/to/img1.png /path/to/img2.jpg /path/to/img3.jpeg /path/to/img4.gif
+```
+
+If a thread is posted, either deliberately or via automatic threading, all media files will be attached to the first toot.
+
+### Adding media descriptions
+A text description can be added to a media file using the `--description=` argument:
+
+```bash
+toopt.php --description="a nice picture" /path/to/image.jpeg
+```
+
+If multiple media are used, descriptions are applied to the media in the order they are provided. For instance:
+
+```bash
+toopt.php --description="img 1" ./img1.jpg --description="img 2" ./img2.jpg
+```
+or
+```bash
+toopt.php --description="img 1" --description="img 2" ./img1.jpg ./img2.jpg
+```
+
+### Combining media and text content
+Media and text content can be combined:
+
+```bash
+toopt.php "look at these two images" /path/to/img1.jpg /path/to/img2.jpg
+```
+or
+```bash
+toopt.php /path/to/toot.txt /path/to/img1.jpg /path/to/img2.jpg
+```
+or
+```bash
+echo "look at these two images" | toopt.php /path/to/img1.jpg /path/to/img2.jpg
+```
 
 ## Examples
 Post a toot from the default account
@@ -153,6 +207,24 @@ or
 toopt.php -i
 ```
 
+Post a media file as a toot
+```bash
+toopt.php /path/to/image.jpg
+```
+
+Post several media files, up to four, as a toot
+```bash
+toopt.php /path/to/image.jpg /path/to/otherimage.jpg
+```
+
+Add descriptions to media files
+```bash
+toopt.php --description="description of image 1" /path/to/img1.jpg --description="description of image 2" /path/to/img2.jpg
+```
+Combine media and text
+```bash
+toopt.php "some text" /path/to/image.jpg
+```
 Display help
 ```bash
 toopt.php --help
