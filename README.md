@@ -1,7 +1,7 @@
 # toopt
 Toopt is a command-line posting utility for mastodon written in PHP. 
 
-Toopt can post text content from the command line, as well as from files, piped content, or interactively. It allows for image uploads, with optional descriptions, and handles multiple accounts.
+Toopt can post text content from the command line, as well as from files, piped content, or interactively. Toopt can thread posts either automatically or deliberately. It allows for image uploads, with optional descriptions, and handles multiple accounts.
 
 Toopt is written as a single file with no dependencies.
 
@@ -78,7 +78,7 @@ toopt.php "Hello world"
 Tooting from an account other than the default account can be done using the `--account=` argument
 
 ```bash
-toopt.php --acount=@otheraccount@mastodon.social "Hello world from other account"
+toopt.php --acount=@otheraccount@phpc.social "Hello world from other account"
 ```
 
 ### Adding content warnings
