@@ -711,10 +711,11 @@ class Toopt
     {
         $endpoint = "https://$instance/api/v1/accounts/verify_credentials";
         try {
-            return  $this->api->get($endpoint, $accessToken);
+            return $this->api->get($endpoint, $accessToken);
         }
-        catch (Exception $e) {
-            $this->error("Could not verify account. ".$e->getMessage());
+        catch (\Exception $e) {
+            $this->error($e->getMessage());
+            $this->error("Could not verify account");
             throw new \Exception(1);
         }
     }
@@ -1473,6 +1474,11 @@ Class Api {
 
         $result = curl_exec($ch);
         $header = curl_getinfo($ch,  CURLINFO_RESPONSE_CODE);
+
+	if($result == false) {
+            curl_close($ch);
+            throw new \Exception("Call to $url returned nothing");
+	}
 
         if($header !== 201 && $header !== 200) {
             curl_close($ch);

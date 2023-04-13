@@ -78,7 +78,7 @@ toopt.php "Hello world"
 Tooting from an account other than the default account can be done using the `--account=` argument
 
 ```bash
-toopt.php --acount=@otheraccount@mastodon.social "Hello world from other account"
+toopt.php --acount=@otheraccount@phpc.social "Hello world from other account"
 ```
 
 ### Adding content warnings
