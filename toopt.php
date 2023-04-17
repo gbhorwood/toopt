@@ -5,7 +5,7 @@ namespace gbhorwood\toopt;
 /**
  * Version
  */
-define('VERSION', 'beta-2.2');
+define('VERSION', 'beta-2.3');
 
 /**
  * Minimum php version required
@@ -538,7 +538,7 @@ class Toopt
         /**
          * Single toot content threaded if necessary
          */
-        $contentArray = count($contentArray) > 1 ? $contentArray : $this->threadify($contentArray[0]);
+        $contentArray = count($contentArray) == 1 ? $this->threadify($contentArray[0]) : $contentArray;
 
         /**
          * Add page footers to each toot
@@ -567,12 +567,12 @@ class Toopt
         if(count($contentArray)) {
             array_map(fn($t) => 
                 $this->doToot($credentials['instance'],
-                $t,
-                null,
-                $this->cw,
-                $response->id,
-                $credentials['access_token']),
-            $contentArray);
+                    $t,
+                    null,
+                    $this->cw,
+                    $response->id,
+                    $credentials['access_token']),
+                $contentArray);
         }
     }
 
@@ -724,7 +724,7 @@ class Toopt
      * Post toot to instance.
      *
      * @param  String  $instance The instance fqdn the toot is posted to, ie mastodon.social
-     * @param  String  $content The text content of the toot
+     * @param  ?String  $content The text content of the toot, if any
      * @param  ?Array  $mediaIds Optional array of ids of uploaded media
      * @param  ?String $cw The content warning/spoiler, if any
      * @param  ?Int    $inReplyToId The id of the toot this toot is in reply to, if any
@@ -732,7 +732,7 @@ class Toopt
      * @return stdClass
      * @throws Exception Terminates script
      */
-    private function doToot(String $instance, String $content, ?Array $mediaIds, ?String $cw, ?Int $inReplyToId, String $accessToken):\stdClass
+    private function doToot(String $instance, ?String $content, ?Array $mediaIds, ?String $cw, ?Int $inReplyToId, String $accessToken):\stdClass
     {
         $endpoint = "https://$instance/api/v1/statuses";
 
@@ -881,7 +881,7 @@ class Toopt
             // upload all media, return ids
             default => array_map(function($m) use($endpoint, $accessToken) {
                             $mediaResult = $this->api->postMedia($endpoint, $m, $accessToken);
-                            $this->ok("Media ".$mediaResult->id." uploaded");
+                            $this->ok("Media file ".$m['name']." uploaded as ".$mediaResult->id);
                             return $mediaResult->id;
                         }, $mediaArgsArray)
         };
