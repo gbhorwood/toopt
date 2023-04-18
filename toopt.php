@@ -375,9 +375,7 @@ class Toopt
     public function handleListAccounts():void
     {
         if(isset($this->args['list-accounts'])) {
-            if(isset($this->configFile)) {
-                $this->outputListAccount();
-            }
+            $this->outputListAccount();
             throw new \Exception(0); // script exit with 0
         }
     }
@@ -394,27 +392,26 @@ class Toopt
         if(isset($this->args['set-default-account'])) {
             $account = $this->args['set-default-account'][0];
 
-            if(isset($this->configFile)) {
+            // read in existing config if any
+            $configArray = json_decode(file_get_contents($this->configFile), true) ?? [];
 
-                // read in existing config if any
-                $configArray = json_decode(file_get_contents($this->configFile) ?? [], true);
-
-                // handle invalid account
-                if(!in_array($account, array_keys($configArray['accounts']))) {
-                    $this->error("Account $account does not exist");
-                    $this->outputListAccount();
-                    throw new \Exception(1);
-                }
-
-                // update and write config data
-                $configArray['default'] = $account;
-                $fp = fopen($this->configFile, 'w');
-                fwrite($fp, json_encode($configArray, JSON_PRETTY_PRINT));
-                fclose($fp);
-                $this->ok("Updated $account to default");
+            // handle invalid account
+            if(!in_array($account, array_keys($configArray['accounts'] ?? []))) {
+                $this->error("Account $account does not exist");
                 $this->outputListAccount();
-                throw new \Exception(0); // script exit with 0
+                throw new \Exception(1);
             }
+
+            // update and write config data
+            $configArray['default'] = $account;
+            $fp = fopen($this->configFile, 'w');
+            fwrite($fp, json_encode($configArray, JSON_PRETTY_PRINT));
+            fclose($fp);
+
+            $this->ok("Updated $account to default");
+            $this->outputListAccount();
+
+            throw new \Exception(0); // script exit with 0
         }
     }
 
@@ -430,36 +427,34 @@ class Toopt
         if(isset($this->args['delete-account'])) {
             $account = $this->args['delete-account'][0];
 
-            if(isset($this->configFile)) {
+            // read in existing config if any
+            $configArray = json_decode(file_get_contents($this->configFile), true) ?? [];
 
-                // read in existing config if any
-                $configArray = json_decode(file_get_contents($this->configFile) ?? [], true);
-
-                // error on trying to delete default account
-                if($configArray['default'] == $account) {
-                    $this->error("Cannot delete default account. Change default first");
-                    $this->outputListAccount();
-                    throw new \Exception(1);
-                }
-
-                // if account exists, delete it and rewrite config file
-                if(in_array($account, array_keys($configArray['accounts']))) {
-                    unset($configArray['accounts'][$account]);
-                    $fp = fopen($this->configFile, 'w');
-                    fwrite($fp, json_encode($configArray, JSON_PRETTY_PRINT));
-                    fclose($fp);
-                    $this->ok("Deleted $account");
-                }
-                // error on account does not exist
-                else {
-                    $this->info("Account $account does not exist");
-                    $this->outputListAccount();
-                    throw new \Exception(1);
-                }
-
-                // output new account list
+            // error on trying to delete default account
+            if(($configArray['default'] ?? null) == $account) {
+                $this->error("Cannot delete default account. Change default first");
                 $this->outputListAccount();
+                throw new \Exception(1);
             }
+
+            // if account exists, delete it and rewrite config file
+            if(in_array($account, array_keys($configArray['accounts'] ?? []))) {
+                unset($configArray['accounts'][$account]);
+                $fp = fopen($this->configFile, 'w');
+                fwrite($fp, json_encode($configArray, JSON_PRETTY_PRINT));
+                fclose($fp);
+                $this->ok("Deleted $account");
+            }
+            // error on account does not exist
+            else {
+                $this->info("Account $account does not exist");
+                $this->outputListAccount();
+                throw new \Exception(1);
+            }
+
+            // output new account list
+            $this->outputListAccount();
+
             throw new \Exception(0); // script exit with 0
         }
     }
@@ -1048,16 +1043,16 @@ class Toopt
         $configArray = json_decode(file_get_contents($this->configFile), true);
         $default = @$configArray['default'] ?? null;
 
+        // build printable list of accounts
         $outputArray = array_map(function($a) use($default) {
             $lead = $a == $default ? GREEN_ANSI."* ".CLOSE_ANSI : "  ";
             return $lead.$a.PHP_EOL;
         }, array_keys($configArray['accounts'] ?? []));
 
-        $output = count($outputArray) > 0 ?
-            BOLD_ANSI."Available accounts:".CLOSE_ANSI.PHP_EOL.join($outputArray) :
-            "There are no accounts. Please add an account with --add-account";
-
-        $this->writeOut($output);
+        match(count($outputArray)) {
+            0 => $this->error("There are no accounts. Please add an account with --add-account"),
+            default => $this->writeOut(BOLD_ANSI."Available accounts:".CLOSE_ANSI.PHP_EOL.join($outputArray))
+        };
     }
 
     /**

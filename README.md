@@ -20,6 +20,8 @@ wget https://toopt.fruitbat.studio/toopt.php -O ./toopt.php
 chmod 755 ./toopt.php
 ```
 
+For the latest version, check out the repository and put the `toopt.php` file anywhere in your path, set as executable.
+
 ## Prerequisites
 Toopt is written in PHP and requires the following:
 - PHP (cli) 8.1 or higher
@@ -88,13 +90,26 @@ Content warnings (or spoilers) can be added to toots using the `--cw=` argument:
 toopt.php --cw="warning! test content" "Hello world"
 ```
 
-### Tooting content from files or STDIN
-Toot content can be passed to `toopt` from a file or from a pipe. All of these work:
+### Tooting content from files
+Toot content can be passed to `toopt` from a file:
 
 ```bash
-echo "Hello world from STDIN" | toopt.php
 toopt.php /path/to/hello_world.txt
-cat /path/to/hello_world.txt | toopt.php
+```
+
+or multiple files (see 'Deliberate threading'):
+
+```bash
+toopt.php /path/to/file1.txt /path/to/file2
+```
+
+Files that have the file extension `txt` or no file extension will be handled as toot content.
+
+### Tooting piped content
+Toopt can read content piped in on `STDIN`. For instance:
+
+```bash
+echo "Hello world" | toopt.php
 ```
 
 **Note:** Content from `STDIN` is given priority. If content is piped into to `toopt`, all other content is ignored.
