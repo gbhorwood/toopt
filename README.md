@@ -5,6 +5,21 @@ Toopt can post text content from the command line, as well as from files, piped 
 
 Toopt is written as a single file with no dependencies.
 
+## Prerequisites
+Toopt is written in PHP and requires the following:
+- PHP (cli) 8.1 or higher
+- the PHP posix extension
+- the PHP curl extension
+
+## Quickstart
+The shortest path to posting the first toot using Toopt is:
+```
+wget https://toopt.fruitbat.studio/toopt.php -O ./toopt.php
+chmod 755 ./toopt.php
+./toopt --add-account
+./toopt "Hello World"
+```
+
 ## Installation
 The easiest installation is to download directly.
 
@@ -21,13 +36,6 @@ chmod 755 ./toopt.php
 ```
 
 For the latest version, check out the repository and put the `toopt.php` file anywhere in your path, set as executable.
-
-## Prerequisites
-Toopt is written in PHP and requires the following:
-- PHP (cli) 8.1 or higher
-- the PHP posix extension
-- the PHP curl extension
-
 
 ## Usage
 There are two usage activities: managing accounts, and posting toots.
